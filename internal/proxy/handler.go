@@ -45,7 +45,10 @@ type Config struct {
 	HTTPClient        *http.Client
 	TokenExpiryMargin time.Duration
 	TokenRefresher    TokenRefresher
-	MetricsRepo       domain.MetricsRepository
+	MetricsRepo           domain.MetricsRepository
+	QuotaRepo             domain.QuotaRepository
+	QuotaWarningThreshold float64
+	QuotaSwitchThreshold  float64
 	EventBroadcaster  domain.EventBroadcaster
 	EventRepo         domain.EventRepository
 	FailoverEngine    *FailoverEngine
@@ -87,6 +90,19 @@ func WithTokenExpiryMargin(margin time.Duration) Option {
 // WithMetricsRepository injects a domain.MetricsRepository for SSE token persistence.
 func WithMetricsRepository(repo domain.MetricsRepository) Option {
 	return func(c *Config) { c.MetricsRepo = repo }
+}
+
+// WithQuotaRepository injects a domain.QuotaRepository for proactive quota checks.
+func WithQuotaRepository(repo domain.QuotaRepository) Option {
+	return func(c *Config) { c.QuotaRepo = repo }
+}
+
+// WithQuotaThresholds configures warning and proactive switch usage thresholds.
+func WithQuotaThresholds(warning, switchThreshold float64) Option {
+	return func(c *Config) {
+		c.QuotaWarningThreshold = warning
+		c.QuotaSwitchThreshold = switchThreshold
+	}
 }
 
 // WithEventBroadcaster injects a domain.EventBroadcaster for real-time telemetry.
@@ -180,7 +196,9 @@ func NewProxyHandler(accountRepo domain.AccountRepository, opts ...Option) (*Pro
 		TargetURL:         DefaultTargetURL,
 		MaxRetries:        DefaultMaxRetries,
 		MaxBodyBytes:      DefaultMaxBodyBytes,
-		TokenExpiryMargin: DefaultTokenMargin,
+		TokenExpiryMargin:     DefaultTokenMargin,
+		QuotaWarningThreshold: 0.80,
+		QuotaSwitchThreshold:  0.85,
 	}
 
 	for _, opt := range opts {
@@ -197,9 +215,16 @@ func NewProxyHandler(accountRepo domain.AccountRepository, opts ...Option) (*Pro
 		client = &http.Client{
 			Timeout: 0, // No timeout to allow indefinite SSE streaming
 			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 20,
-				IdleConnTimeout:     90 * time.Second,
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				MaxIdleConns:          100,
+				MaxIdleConnsPerHost:   20,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
 			},
 		}
 	}
@@ -349,22 +374,35 @@ func (h *ProxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Bidirectional full-duplex tunnel
+	// Bidirectional full-duplex tunnel synchronized with sync.WaitGroup
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	go func() {
-		defer destConn.Close()
-		defer clientConn.Close()
+		defer wg.Done()
 		if rw != nil && rw.Reader.Buffered() > 0 {
 			buf := make([]byte, rw.Reader.Buffered())
 			_, _ = rw.Reader.Read(buf)
 			_, _ = destConn.Write(buf)
 		}
 		_, _ = io.Copy(destConn, clientConn)
+		if tcp, ok := destConn.(*net.TCPConn); ok {
+			_ = tcp.CloseWrite()
+		}
 	}()
 
 	go func() {
-		defer destConn.Close()
-		defer clientConn.Close()
+		defer wg.Done()
 		_, _ = io.Copy(clientConn, destConn)
+		if tcp, ok := clientConn.(*net.TCPConn); ok {
+			_ = tcp.CloseWrite()
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		_ = destConn.Close()
+		_ = clientConn.Close()
 	}()
 }
 
@@ -426,6 +464,19 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			currentAcc = acc
+		}
+
+		// Proactive quota threshold check (e.g. >= 85% usage switch)
+		if currentAcc != nil && h.cfg.QuotaRepo != nil && h.cfg.QuotaSwitchThreshold > 0 {
+			buckets, _ := h.cfg.QuotaRepo.GetByAccountID(ctx, currentAcc.ID)
+			for _, b := range buckets {
+				if b != nil && b.IsUsageAboveThreshold(h.cfg.QuotaSwitchThreshold) {
+					if rotated, err := h.failoverEngine.RotateProactively(ctx, currentAcc, b.UsageFraction()); err == nil && rotated != nil {
+						currentAcc = rotated
+					}
+					break
+				}
+			}
 		}
 	} else {
 		isPassThrough = true

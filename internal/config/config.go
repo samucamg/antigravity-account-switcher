@@ -13,6 +13,8 @@ const (
 	DefaultPort        = 8080
 	DefaultUpstreamURL = "https://daily-cloudcode-pa.googleapis.com"
 	DefaultInterval    = "60s"
+	DefaultQuotaWarningThreshold = 0.80 // 80% usage threshold for alert
+	DefaultQuotaSwitchThreshold  = 0.85 // 85% usage threshold for proactive account rotation
 	ConfigFileName     = "config.json"
 	DefaultDBFileName  = "accounts.db"
 )
@@ -23,7 +25,9 @@ type Config struct {
 	DBPath         string `json:"db_path"`
 	AntigravityBin string `json:"antigravity_bin"`
 	UpstreamURL    string `json:"upstream_url"`
-	QuotaInterval  string `json:"quota_interval"`
+	QuotaInterval         string  `json:"quota_interval"`
+	QuotaWarningThreshold float64 `json:"quota_warning_threshold"`
+	QuotaSwitchThreshold  float64 `json:"quota_switch_threshold"`
 	OpenBrowser    bool   `json:"open_browser"`
 }
 
@@ -59,7 +63,9 @@ func DefaultConfig() *Config {
 		DBPath:         DefaultDBPath(),
 		AntigravityBin: "",
 		UpstreamURL:    DefaultUpstreamURL,
-		QuotaInterval:  DefaultInterval,
+		QuotaInterval:         DefaultInterval,
+		QuotaWarningThreshold: DefaultQuotaWarningThreshold,
+		QuotaSwitchThreshold:  DefaultQuotaSwitchThreshold,
 	}
 }
 
@@ -78,6 +84,13 @@ func Load() (*Config, error) {
 
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config JSON at %s: %w", path, err)
+	}
+
+	if cfg.QuotaWarningThreshold <= 0 {
+		cfg.QuotaWarningThreshold = DefaultQuotaWarningThreshold
+	}
+	if cfg.QuotaSwitchThreshold <= 0 {
+		cfg.QuotaSwitchThreshold = DefaultQuotaSwitchThreshold
 	}
 
 	// Environment variable overrides

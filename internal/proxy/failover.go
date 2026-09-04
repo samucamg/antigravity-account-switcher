@@ -60,6 +60,10 @@ func (f *FailoverEngine) RotateAccount(ctx context.Context, exhaustedAcc *domain
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// 1. Anti-stampede check: Did another concurrent request already rotate away from exhaustedAcc?
 	currentActive, err := f.accountRepo.GetActive(ctx)
 	if err == nil && currentActive != nil && currentActive.ID != exhaustedAcc.ID && currentActive.IsAvailable() {
@@ -122,6 +126,52 @@ func (f *FailoverEngine) RotateAccount(ctx context.Context, exhaustedAcc *domain
 			"from_email":      exhaustedAcc.Email,
 			"to_account_id":   nextAcc.ID,
 			"to_email":        nextAcc.Email,
+		},
+		Timestamp: time.Now().UTC(),
+	})
+
+	return nextAcc, nil
+}
+
+// RotateProactively performs a seamless account switch before reaching 100% quota exhaustion.
+func (f *FailoverEngine) RotateProactively(ctx context.Context, currentAcc *domain.Account, usagePct float64) (*domain.Account, error) {
+	if currentAcc == nil {
+		return nil, domain.ErrAccountNotFound
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Anti-stampede check: Check if active account already shifted
+	latestActive, err := f.accountRepo.GetActive(ctx)
+	if err == nil && latestActive != nil && latestActive.ID != currentAcc.ID && latestActive.IsAvailable() {
+		return latestActive, nil
+	}
+
+	nextAcc, err := f.accountRepo.GetNextAvailable(ctx, currentAcc.ID)
+	if err != nil || nextAcc == nil {
+		// No alternate healthy account available, continue with current account
+		return currentAcc, nil
+	}
+
+	if err := f.accountRepo.SetActive(ctx, nextAcc.ID); err != nil {
+		return currentAcc, fmt.Errorf("failed to set proactive active account to %s: %w", nextAcc.ID, err)
+	}
+
+	f.emitEvent(&domain.ProxyEvent{
+		Type:      domain.EventTypeProactiveSwitch,
+		AccountID: nextAcc.ID,
+		Message:   fmt.Sprintf("Proactively switched active account from %s to %s (quota usage reached %.0f%%)", currentAcc.Email, nextAcc.Email, usagePct*100),
+		Details: map[string]any{
+			"from_account_id": currentAcc.ID,
+			"from_email":      currentAcc.Email,
+			"to_account_id":   nextAcc.ID,
+			"to_email":        nextAcc.Email,
+			"usage_pct":       usagePct,
 		},
 		Timestamp: time.Now().UTC(),
 	})

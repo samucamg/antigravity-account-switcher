@@ -47,7 +47,8 @@ type Config struct {
 	TokenExpiryMargin time.Duration
 	TokenRefresher    TokenRefresher
 	EventBroadcaster  domain.EventBroadcaster
-	EventRepo         domain.EventRepository
+	EventRepo             domain.EventRepository
+	QuotaWarningThreshold float64
 }
 
 // Option configures Config.
@@ -76,6 +77,11 @@ func WithTokenExpiryMargin(margin time.Duration) Option {
 // WithTokenRefresher sets the token refresh provider.
 func WithTokenRefresher(refresher TokenRefresher) Option {
 	return func(c *Config) { c.TokenRefresher = refresher }
+}
+
+// WithQuotaWarningThreshold sets the usage threshold fraction for emitting quota warning events.
+func WithQuotaWarningThreshold(threshold float64) Option {
+	return func(c *Config) { c.QuotaWarningThreshold = threshold }
 }
 
 // WithEventBroadcaster sets the real-time event broadcaster.
@@ -123,7 +129,8 @@ func NewPoller(
 	cfg := Config{
 		PollInterval:      DefaultPollInterval,
 		BaseURL:           DefaultBaseURL,
-		TokenExpiryMargin: DefaultTokenExpiryMargin,
+		TokenExpiryMargin:     DefaultTokenExpiryMargin,
+		QuotaWarningThreshold: 0.80,
 	}
 
 	for _, opt := range opts {
@@ -134,6 +141,9 @@ func NewPoller(
 	if client == nil {
 		client = &http.Client{
 			Timeout: DefaultHTTPTimeout,
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+			},
 		}
 	}
 
@@ -341,6 +351,31 @@ func (p *Poller) pollAccount(ctx context.Context, acc *domain.Account, now time.
 		_ = p.quotaRepo.DeleteByAccountID(ctx, acc.ID)
 		if err := p.quotaRepo.UpsertBuckets(ctx, buckets); err != nil {
 			return fmt.Errorf("failed to upsert quota buckets: %w", err)
+		}
+	}
+
+	// 5. Warning check for quota approaching threshold (e.g. >= 80% usage)
+	warnThreshold := p.cfg.QuotaWarningThreshold
+	if warnThreshold <= 0 {
+		warnThreshold = 0.80
+	}
+	for _, b := range buckets {
+		if b != nil && b.IsUsageAboveThreshold(warnThreshold) {
+			p.emitEvent(&domain.ProxyEvent{
+				Type:      domain.EventTypeQuotaWarning,
+				AccountID: acc.ID,
+				Message:   fmt.Sprintf("Account %s reached %.0f%% quota usage on %s", acc.Email, b.UsageFraction()*100, b.DisplayName),
+				Details: map[string]any{
+					"account_id":   acc.ID,
+					"email":        acc.Email,
+					"bucket_id":    b.BucketID,
+					"display_name": b.DisplayName,
+					"usage_pct":    b.UsageFraction(),
+					"reset_time":   b.ResetTime,
+				},
+				Timestamp: now,
+			})
+			break
 		}
 	}
 

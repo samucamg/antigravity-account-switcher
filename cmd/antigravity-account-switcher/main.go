@@ -166,6 +166,8 @@ func runServe(args []string) {
 		accRepo,
 		proxy.WithTargetURL(*targetURL),
 		proxy.WithMetricsRepository(metricsRepo),
+		proxy.WithQuotaRepository(quotaRepo),
+		proxy.WithQuotaThresholds(cfg.QuotaWarningThreshold, cfg.QuotaSwitchThreshold),
 		proxy.WithEventBroadcaster(broadcaster),
 		proxy.WithEventRepository(eventRepo),
 		proxy.WithFailoverEngine(failoverEngine),
@@ -184,6 +186,7 @@ func runServe(args []string) {
 		quota.WithEventBroadcaster(broadcaster),
 		quota.WithEventRepository(eventRepo),
 		quota.WithTokenRefresher(tokenRefresher),
+		quota.WithQuotaWarningThreshold(cfg.QuotaWarningThreshold),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing quota monitor: %v\n", err)

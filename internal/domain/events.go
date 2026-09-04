@@ -15,6 +15,10 @@ const (
 	EventTypeFailover429 EventType = "failover_429"
 	// EventTypeQuotaExhausted denotes an account whose quota was marked exhausted.
 	EventTypeQuotaExhausted EventType = "quota_exhausted"
+	// EventTypeQuotaWarning denotes an account approaching quota limits (e.g. >= 80% usage).
+	EventTypeQuotaWarning EventType = "quota_warning"
+	// EventTypeProactiveSwitch denotes a proactive failover before reaching 100% quota exhaustion (e.g. >= 85% usage).
+	EventTypeProactiveSwitch EventType = "proactive_switch"
 	// EventTypeQuotaRestored denotes an account whose quota was restored after reset.
 	EventTypeQuotaRestored EventType = "quota_restored"
 	// EventTypeTokenRefreshed denotes a successful OAuth2 access token refresh.

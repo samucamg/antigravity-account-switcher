@@ -32,6 +32,26 @@ func (q *QuotaBucket) IsExhausted() bool {
 	return q.RemainingFraction <= 0.0 || (q.RemainingAmount == 0 && q.RemainingFraction < 0.05)
 }
 
+// UsageFraction returns consumed quota fraction (1.0 - RemainingFraction).
+func (q *QuotaBucket) UsageFraction() float64 {
+	u := 1.0 - q.RemainingFraction
+	if u < 0.0 {
+		return 0.0
+	}
+	if u > 1.0 {
+		return 1.0
+	}
+	return u
+}
+
+// IsUsageAboveThreshold checks if consumed fraction exceeds or equals threshold (e.g. 0.80 for 80% or 0.85 for 85%).
+func (q *QuotaBucket) IsUsageAboveThreshold(threshold float64) bool {
+	if threshold <= 0.0 {
+		return false
+	}
+	return q.UsageFraction() >= threshold
+}
+
 // HasReset determines if the quota reset time has passed relative to now.
 func (q *QuotaBucket) HasReset(now time.Time) bool {
 	return !q.ResetTime.IsZero() && now.After(q.ResetTime)

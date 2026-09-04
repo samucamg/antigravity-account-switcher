@@ -1,10 +1,12 @@
-# 🚀 Antigravity Account Switcher - Windows Installer & Setup Script
+﻿# 🚀 Antigravity Account Switcher - Windows Installer & Setup Script
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "`n========================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "  🚀 Antigravity Account Switcher - Windows Installer" -ForegroundColor Cyan
-Write-Host "========================================================`n" -ForegroundColor Cyan
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host ""
 
 # 0. Stop any background instance of switcher to release process/ports
 Get-Process -Name "antigravity-account-switcher" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -21,7 +23,8 @@ try {
 }
 
 # 2. Compile binary
-Write-Host "`n[2/4] Compiling antigravity-account-switcher.exe..." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "[2/4] Compiling antigravity-account-switcher.exe..." -ForegroundColor Yellow
 try {
     & go build -o antigravity-account-switcher.exe ./cmd/antigravity-account-switcher
     Write-Host "  ✓ Successfully compiled antigravity-account-switcher.exe" -ForegroundColor Green
@@ -32,7 +35,8 @@ try {
 }
 
 # 3. Configure default port to 1831 (avoids common 8080 conflicts)
-Write-Host "`n[3/4] Configuring default port (1831)..." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "[3/4] Configuring default port (1831)..." -ForegroundColor Yellow
 try {
     & .\antigravity-account-switcher.exe config set port 1831 | Out-Null
     Write-Host "  ✓ Default port set to 1831" -ForegroundColor Green
@@ -41,7 +45,8 @@ try {
 }
 
 # 4. Create helper scripts (start.ps1 and add-account.ps1)
-Write-Host "`n[4/4] Creating 1-click execution scripts..." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "[4/4] Creating 1-click execution scripts..." -ForegroundColor Yellow
 
 $startCode = '$exe = Join-Path $PSScriptRoot "antigravity-account-switcher.exe"; if (Test-Path $exe) { & $exe launch --open } else { Write-Host "Executable not found! Run .\install.ps1 first." -ForegroundColor Red }'
 $addCode   = '$exe = Join-Path $PSScriptRoot "antigravity-account-switcher.exe"; if (Test-Path $exe) { & $exe add-account } else { Write-Host "Executable not found! Run .\install.ps1 first." -ForegroundColor Red }'
@@ -52,11 +57,15 @@ Set-Content -Path (Join-Path $PSScriptRoot "add-account.ps1") -Value $addCode -E
 Write-Host "  ✓ Created .\start.ps1       (Launches Switcher + Antigravity IDE)" -ForegroundColor Green
 Write-Host "  ✓ Created .\add-account.ps1 (Add Google Account via Browser)" -ForegroundColor Green
 
-Write-Host "`n========================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "  🎉 Setup Complete!" -ForegroundColor Green
 Write-Host "========================================================" -ForegroundColor Cyan
-Write-Host "`nNext Steps:" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Next Steps:" -ForegroundColor Yellow
 Write-Host "  1. Add your Google accounts:" -ForegroundColor White
 Write-Host "     .\add-account.ps1" -ForegroundColor Cyan
-Write-Host "`n  2. Launch Antigravity IDE under supervision:" -ForegroundColor White
-Write-Host "     .\start.ps1`n" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  2. Launch Antigravity IDE under supervision:" -ForegroundColor White
+Write-Host "     .\start.ps1" -ForegroundColor Cyan
+Write-Host ""

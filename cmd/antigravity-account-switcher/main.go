@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"syscall"
+	"strings"
 	"time"
 
 	"github.com/samucamg/antigravity-account-switcher/internal/config"
@@ -55,6 +56,8 @@ func main() {
 		runAddAccount(args)
 	case "list-accounts":
 		runListAccounts(args)
+	case "switch-account":
+		runSwitchAccount(args)
 	case "status":
 		runStatus(args)
 	case "version", "-v", "--version":
@@ -83,6 +86,7 @@ func printUsage() {
 	fmt.Println("  uninstall-desktop  Remove GNOME / XDG desktop application entry")
 	fmt.Println("  add-account        Onboard a Google account via 1-click browser OAuth2 flow")
 	fmt.Println("  list-accounts      Display registered accounts and their quota availability")
+	fmt.Println("  switch-account     Set a registered account as active by email or ID")
 	fmt.Println("  refresh-quotas     Force live quota synchronization from Google for all accounts")
 	fmt.Println("  status             Display current active account and switcher health")
 	fmt.Println("  version            Display binary version, commit, and build date")
@@ -414,6 +418,61 @@ func runListAccounts(args []string) {
 			weeklyStr,
 		)
 	}
+}
+
+func runSwitchAccount(args []string) {
+	fs := flag.NewFlagSet("switch-account", flag.ExitOnError)
+	dbPath := fs.String("db", defaultDBPath(), "Path to SQLite database file")
+	_ = fs.Parse(args)
+
+	target := strings.Join(fs.Args(), " ")
+	if target == "" {
+		fmt.Fprintln(os.Stderr, "Usage: switch-account <email or account-id>")
+		os.Exit(1)
+	}
+
+	db, err := sqlite.Open(*dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	accRepo := sqlite.NewAccountRepository(db)
+
+	accounts, err := accRepo.List(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to list accounts: %v\n", err)
+		os.Exit(1)
+	}
+
+	var matched *domain.Account
+	for _, acc := range accounts {
+		if strings.EqualFold(acc.Email, target) || strings.EqualFold(acc.ID, target) {
+			matched = acc
+			break
+		}
+	}
+	if matched == nil {
+		fmt.Fprintf(os.Stderr, "No account found matching %q\n\n", target)
+		fmt.Fprintln(os.Stderr, "Registered accounts:")
+		for _, acc := range accounts {
+			mark := "  "
+			if acc.IsActive {
+				mark = "* "
+			}
+			fmt.Fprintf(os.Stderr, "  %s%s\n", mark, acc.Email)
+		}
+		os.Exit(1)
+	}
+
+	if err := accRepo.SetActive(ctx, matched.ID); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to activate account: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Switched active account to: %s\n", matched.Email)
 }
 
 func runStatus(args []string) {

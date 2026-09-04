@@ -41,7 +41,7 @@ const (
 // 1. Environment variables: ANTIGRAVITY_CLIENT_ID and ANTIGRAVITY_CLIENT_SECRET
 // 2. Existing local Antigravity token files: ~/.gemini/antigravity-acp/acp_token.json
 // 3. Installed Antigravity 2.0 binary inspection (language_server, main.js)
-const (
+var (
 	// DefaultClientID is the default Google Antigravity 2.0 Client ID fallback.
 	DefaultClientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
 	// DefaultClientSecret is the default Google Antigravity 2.0 Client Secret fallback.

@@ -1,10 +1,13 @@
-﻿# 🚀 Antigravity Account Switcher - Windows Installer & Setup Script
+# 🚀 Antigravity Account Switcher - Windows Installer & Setup Script
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "`n========================================================" -ForegroundColor Cyan
 Write-Host "  🚀 Antigravity Account Switcher - Windows Installer" -ForegroundColor Cyan
 Write-Host "========================================================`n" -ForegroundColor Cyan
+
+# 0. Stop any background instance of switcher to release process/ports
+Get-Process -Name "antigravity-account-switcher" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 # 1. Check Go environment
 Write-Host "[1/4] Checking Go environment..." -ForegroundColor Yellow

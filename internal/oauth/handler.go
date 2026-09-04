@@ -157,16 +157,14 @@ func discoverFromIDEBundle() (string, string) {
 		"/Applications/Antigravity.app/Contents/Resources/app/out/main.js",
 	)
 
-	reID := regexp.MustCompile(`(\d+-[a-z0-9_]+\.apps\.googleusercontent\.com)`)
-	prefix := string([]byte{0x47, 0x4f, 0x43, 0x53, 0x50, 0x58, 0x2d}) // native client secret prefix bytes
-	reSec := regexp.MustCompile(regexp.QuoteMeta(prefix) + `[A-Za-z0-9_-]{28}`)
+	prefix := string([]byte{0x47, 0x4f, 0x43, 0x53, 0x50, 0x58, 0x2d}) // native client secret prefix bytes "GOCSPX-"
+	rePair := regexp.MustCompile(`(\d+-[a-z0-9_]+\.apps\.googleusercontent\.com).{1,150}?(` + regexp.QuoteMeta(prefix) + `[A-Za-z0-9_-]{28})`)
 
 	for _, c := range candidates {
 		if data, err := os.ReadFile(c); err == nil {
-			mID := reID.Find(data)
-			mSec := reSec.Find(data)
-			if len(mID) > 0 && len(mSec) > 0 {
-				return string(mID), string(mSec)
+			matches := rePair.FindSubmatch(data)
+			if len(matches) >= 3 {
+				return string(matches[1]), string(matches[2])
 			}
 		}
 	}
@@ -385,21 +383,29 @@ type OAuthService struct {
 
 // NewOAuthService constructs a new OAuthService.
 func NewOAuthService(accountRepo domain.AccountRepository, opts ...Option) *OAuthService {
-	clientID, clientSecret := ResolveCredentials()
-
 	cfg := Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		AuthURL:      DefaultGoogleAuthURL,
-		TokenURL:     DefaultGoogleTokenURL,
-		UserInfoURL:  DefaultGoogleUserInfoURL,
-		Scopes:       DefaultScopes,
-		StateTTL:     DefaultStateTTL,
-		FlowTimeout:  DefaultFlowTimeout,
+		AuthURL:     DefaultGoogleAuthURL,
+		TokenURL:    DefaultGoogleTokenURL,
+		UserInfoURL: DefaultGoogleUserInfoURL,
+		Scopes:      DefaultScopes,
+		StateTTL:    DefaultStateTTL,
+		FlowTimeout: DefaultFlowTimeout,
 	}
 
 	for _, opt := range opts {
 		opt(&cfg)
+	}
+
+	// Resolve credentials lazily: only after options are applied so that
+	// tests using mock URLs skip the expensive IDE-bundle file scan.
+	if cfg.ClientID == "" || cfg.ClientSecret == "" {
+		resolvedID, resolvedSec := ResolveCredentials()
+		if cfg.ClientID == "" {
+			cfg.ClientID = resolvedID
+		}
+		if cfg.ClientSecret == "" {
+			cfg.ClientSecret = resolvedSec
+		}
 	}
 
 	if cfg.ClientID == "" && (strings.Contains(cfg.TokenURL, "127.0.0.1") || strings.Contains(cfg.TokenURL, "localhost") || strings.Contains(cfg.AuthURL, "127.0.0.1")) {

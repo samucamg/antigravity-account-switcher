@@ -1,292 +1,201 @@
-# Antigravity Account Switcher
+<p align="center">
+  <img src="https://img.shields.io/badge/Made%20with-Go-00ADD8?style=plastic&logo=go&logoColor=white" alt="Go"/>
+  <img src="https://img.shields.io/badge/status-stable-success?style=plastic" alt="status"/>
+</p>
 
-[English](README.md) | [Português (Brasil)](README.pt-BR.md)
+<h1 align="center">🚀 Antigravity Account Switcher</h1>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go)](https://go.dev/)
-[![CI Status](https://github.com/Muriel-Gasparini/antigravity-account-switcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Muriel-Gasparini/antigravity-account-switcher/actions)
+<p align="center"><b>Your “never get rate-limited again” sidekick for Google Antigravity 2.0.</b></p>
 
-Automatic Multi-Account Pool Management, Real-Time Quota Tracking, and Seamless HTTP 429 Failover for **Google Antigravity 2.0** and CLI (`agy`).
+<p align="center">
+  🇺🇸 English · <a href="README.pt-BR.md">🇧🇷 Português (Brasil)</a>
+</p>
 
----
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-Linux_%7C_Windows_%7C_macOS-6f42c1?style=plastic&logo=linux&logoColor=white" alt="platform"/>
+  <img src="https://img.shields.io/github/go-mod/go-version/Muriel-Gasparini/antigravity-account-switcher?style=plastic&logo=go&label=Go" alt="go version"/>
+  <img src="https://img.shields.io/github/license/Muriel-Gasparini/antigravity-account-switcher?style=plastic&color=blue" alt="license"/>
+  <img src="https://img.shields.io/github/stars/Muriel-Gasparini/antigravity-account-switcher?style=plastic&logo=github" alt="stars"/>
+  <img src="https://github.com/Muriel-Gasparini/antigravity-account-switcher/actions/workflows/ci.yml/badge.svg" alt="CI"/>
+</p>
 
-## What is Antigravity 2.0 and why is this needed?
-
-**Google Antigravity 2.0** is Google DeepMind's standalone AI-first development application (distinct from the legacy preview VS Code extension).
-
-When working intensely with Antigravity 2.0, developers frequently hit rate limits (`HTTP 429 RESOURCE_EXHAUSTED` or rolling 5-hour limits) across Claude, GPT, and Gemini model tiers.
-
-**Antigravity Account Switcher** runs as a transparent, high-performance local supervisor that intercepts Antigravity 2.0 requests. When your active account exhausts its quota, the switcher **seamlessly rotates to the next available account in your pool and replays the in-flight request in memory** — without interrupting your agent's thinking, breaking generation streams, or causing errors in the editor.
-
----
-
-## Installing Google Antigravity 2.0 on Linux
-
-> [!IMPORTANT]
-> **Google Antigravity 2.0 is NOT distributed via package managers (`apt`, `snap`, `dnf`, `pacman`, or `flatpak`).**  
-> Google provides it directly as a standalone `.tar.gz` archive containing the bundled binary and runtime libraries.
-
-On Linux, software distributed this way should be placed in either the **XDG User Directory** (recommended, no root required) or the **System `/opt` Directory** (requires root).
-
-### Option 1: User Installation (Recommended — No `sudo` required)
-
-This follows the **Linux XDG Base Directory Specification** (`~/.local/share/` and `~/.local/bin/`). It does not require administrator privileges and will not affect other users or system files:
-
-```bash
-# 1. Create the application directory
-mkdir -p ~/.local/share/antigravity
-
-# 2. Extract the downloaded Google archive
-tar -xzf ~/Downloads/Antigravity-linux-x64.tar.gz -C ~/.local/share/antigravity --strip-components=1
-
-# 3. Ensure the binary has execution permissions
-chmod +x ~/.local/share/antigravity/antigravity
-
-# 4. Create a symlink in ~/.local/bin (in your PATH on modern Linux distros)
-mkdir -p ~/.local/bin
-ln -sf ~/.local/share/antigravity/antigravity ~/.local/bin/antigravity
-```
-
-### Option 2: System-Wide Installation (Requires `sudo` / FHS Standard)
-
-This follows the **Filesystem Hierarchy Standard (FHS)** for add-on third-party software in `/opt`:
-
-```bash
-# 1. Create system directory
-sudo mkdir -p /opt/antigravity
-
-# 2. Extract the archive
-sudo tar -xzf ~/Downloads/Antigravity-linux-x64.tar.gz -C /opt/antigravity --strip-components=1
-
-# 3. Create global symlink
-sudo ln -sf /opt/antigravity/antigravity /usr/local/bin/antigravity
-```
+<p align="center">
+  🧠 Claude &nbsp;·&nbsp; 🤖 GPT &nbsp;·&nbsp; ✨ Gemini — <b>all behind a single account pool</b>
+</p>
 
 ---
 
-## How the Switcher Connects to Antigravity 2.0
+## 😩 Has this ever happened to you?
 
-### Automatic Detection (Zero Configuration)
-If you followed either of the standard installation methods above, **you do not need to configure any paths**.  
-When you run `antigravity-account-switcher launch`, the switcher automatically discovers your binary by checking standard Linux locations:
-1. `~/.local/bin/antigravity`
-2. `~/.local/share/antigravity/antigravity`
-3. `/usr/local/bin/antigravity`
-4. `/opt/antigravity/antigravity`
-5. `~/tools/Antigravity/Antigravity-x64/antigravity` *(user tools folder fallback)*
-6. Any `antigravity` or `agy` command available in your system `$PATH`
+You are in the middle of an awesome coding session with Antigravity 2.0… and suddenly:
 
-### Custom Path Configuration
-If you unpacked Antigravity 2.0 into a custom folder, you can explicitly configure the binary location using any of the following methods:
-
-**Method 1: Permanent setting via CLI (Recommended)**
-```bash
-antigravity-account-switcher config set antigravity_bin /path/to/your/antigravity
+```text
+HTTP 429 RESOURCE_EXHAUSTED
 ```
 
-**Method 2: Environment Variable**
-```bash
-export ANTIGRAVITY_BIN="/path/to/your/antigravity"
-```
+Quota exhausted. Flow interrupted. Momentum lost. 😤
 
-**Method 3: Per-launch flag**
-```bash
-antigravity-account-switcher launch --bin /path/to/your/antigravity
+**Antigravity Account Switcher** exists so this never happens to you again.
+
+---
+
+## ✨ What does it do for you?
+
+The switcher is a **transparent local supervisor** that sits between Antigravity 2.0 and Google Cloud Code:
+
+| 💜 Feature | What happens |
+|:---|:---|
+| 🔔 **Warning at 80%** | When an account hits 80% usage you get a real-time alert (web dashboard + events) — enough time to plan calmly. |
+| 🔁 **Proactive switch at 85%** | Before the quota blows up, the switcher rotates to the next healthy account in your pool. Your session never notices. |
+| 🔄 **Reactive failover (HTTP 429)** | If a 429 still slips through, the in-flight request is replayed in memory with the new account — no editor errors. |
+| 📊 **Real-time quotas** | Monitors usage per model (Claude, GPT, Gemini) and renders everything in a beautiful web dashboard. |
+| 🔒 **100% local & private** | No token or prompt ever leaves your machine. Everything lives in your local SQLite (`accounts.db`). |
+| 🪟🐧🍏 **Linux, Windows & macOS** | A single dependency-free Go binary. |
+
+---
+
+## 🛠️ How it works (in 10 seconds)
+
+```text
+  Antigravity 2.0 / agy
+          │  (request intercepted by the local proxy)
+          ▼
+  🧲 Antigravity Account Switcher
+          │  uses the active account from the pool
+          │
+          ├─ quota ≥ 80%  → 🔔 fires warning alert
+          ├─ quota ≥ 85%  → 🔁 rotates account (on the spot)
+          └─ HTTP 429     → 🔄 tries next account + replays in memory
+          ▼
+  ☁️ Google Cloud Code (Cloud Code PA)
 ```
 
 ---
 
-## Quick Start (3 Steps)
+## 📦 Installing the Switcher
 
-### 1. Build and Install the Switcher
+### 🐧 Linux / macOS
+
 ```bash
 git clone https://github.com/Muriel-Gasparini/antigravity-account-switcher.git
 cd antigravity-account-switcher
-make install
+make install        # static binary → ~/.local/bin
 ```
-*Compiles a single static binary with CGO_ENABLED=0 and installs it to `~/.local/bin/antigravity-account-switcher`.*
 
-### 2. Onboard Your Accounts
-Authenticate one or more Google accounts:
+### 🪟 Windows
+
+**Option A — build on Windows (PowerShell or CMD):**
+
+```powershell
+git clone https://github.com/Muriel-Gasparini/antigravity-account-switcher.git
+cd antigravity-account-switcher
+go build -o antigravity-account-switcher.exe ./cmd/antigravity-account-switcher
+.\antigravity-account-switcher.exe serve
+```
+
+**Option B — using WSL2 (Windows Subsystem for Linux):**
+just follow the Linux steps inside WSL2. The switcher auto-detects the Antigravity binary installed on Windows.
+
+> [!TIP]
+> On Windows, Antigravity is usually installed at
+> `%LOCALAPPDATA%\Programs\Antigravity\antigravity.exe` — and the switcher finds that path automatically. 🎯
+
+---
+
+## 🏃 Quick start in 3 steps
+
+1️⃣ **Add your Google accounts** (as many as you want — 2, 3, 10…)
+
 ```bash
 antigravity-account-switcher add-account
 ```
-*(If you already have Antigravity 2.0 installed and logged in, the switcher automatically detects and imports your active login on first launch!)*
 
-### 3. Launch Antigravity 2.0
+2️⃣ **Launch Antigravity under supervision** (recommended) or run the service only:
+
 ```bash
-antigravity-account-switcher launch
+antigravity-account-switcher launch   # proxy + opens Antigravity
+antigravity-account-switcher serve    # proxy + dashboard only
 ```
-The switcher starts the background proxy, launches Antigravity 2.0 with scoped proxy variables, and monitors health. When you close Antigravity 2.0, the switcher shuts down automatically.
+
+3️⃣ **Keep an eye on the dashboard:** open `http://127.0.0.1:8080/` in your browser and watch accounts, quotas and history live. 👀
+
+> 💡 Already logged into Antigravity? On first run the switcher **imports your login automatically** — zero configuration.
 
 ---
 
-## Desktop Integration (GNOME / KDE / XFCE)
+## 🖥️ Web Dashboard
 
-To launch Antigravity 2.0 directly from your application launcher or dock with multi-account supervision:
-
-```bash
-antigravity-account-switcher install-desktop
-```
-This automatically:
-- Resolves your Antigravity 2.0 executable.
-- Extracts and installs the official application icon to `~/.local/share/icons/antigravity.png`.
-- Creates `~/.local/share/applications/antigravity.desktop` pointing to `antigravity-account-switcher launch %F`.
-
-To remove the desktop integration:
-```bash
-antigravity-account-switcher uninstall-desktop
-```
+- 📋 status of every account in the pool (active, available, exhausted)
+- 🧮 remaining quota percentage per model
+- 🔔 visual alerts when usage hits 80%
+- 📈 token charts and switch history (real-time SSE)
 
 ---
 
-## Commands Reference
-
-The CLI provides commands for launch supervision, manual switching, and configuration:
+## ⌨️ CLI commands
 
 | Command | Description |
-| :--- | :--- |
-| `launch` | **(Recommended)** Launches Antigravity 2.0 under proxy supervision. |
-| `serve` | Runs the proxy, background quota monitor, and web dashboard as a daemon. |
-| `wrap -- <cmd>` | Executes any arbitrary command with scoped switcher proxy variables. |
-| `add-account` | Initiates RFC 8252 loopback OAuth2 flow to register a Google account. |
-| `list-accounts` | Displays all registered accounts, active status, and quota percentages. |
-| `refresh-quotas` | Forces an immediate live quota sync from Google for all registered accounts. |
-| `status` | Shows the currently active account, token totals, and switcher health. |
-| `config` | Inspects or updates persistent settings (`get`, `set`, `list`). |
-| `install-desktop` | Installs GNOME / XDG `.desktop` launcher shortcut and application icon. |
-| `uninstall-desktop`| Removes GNOME / XDG `.desktop` launcher shortcut. |
-| `version` | Displays binary version, commit hash, and build timestamp. |
-
-### Useful Command Flags
-
-- **Open Web Dashboard on Launch:**
-  ```bash
-  antigravity-account-switcher launch --open
-  ```
-- **Headless / Remote SSH Account Addition:**
-  ```bash
-  antigravity-account-switcher add-account --no-browser
-  ```
-- **Specify Custom Port:**
-  ```bash
-  antigravity-account-switcher launch --port 1831
-  ```
+|:---|:---|
+| `launch` | **(recommended)** starts Antigravity 2.0 under the supervised proxy |
+| `serve` | runs proxy + quota monitor + web dashboard |
+| `wrap -- <cmd>` | runs any command with the switcher proxy |
+| `add-account` | adds a Google account via OAuth2 (loopback + PKCE) |
+| `list-accounts` | lists accounts, active one and % quota |
+| `refresh-quotas` | syncs quotas with Google on demand |
+| `status` | shows active account, tokens and service health |
+| `config` | manages settings (`get`, `set`, `list`) |
+| `install-desktop` | creates a launcher icon entry on Linux (GNOME/KDE/XFCE) |
+| `uninstall-desktop` | removes the launcher entry |
+| `version` | binary version, commit and build date |
 
 ---
 
-## Configuration Reference
+## ⚙️ Configuration
 
-Settings are stored in JSON format at `~/.config/antigravity-account-switcher/config.json`.
+File: `~/.config/antigravity-account-switcher/config.json` — or `%APPDATA%\antigravity-account-switcher\config.json` on Windows.
 
 ```bash
-# View all current settings
 antigravity-account-switcher config list
 
-# Set path to Antigravity 2.0 executable
-antigravity-account-switcher config set antigravity_bin ~/.local/share/antigravity/antigravity
-
-# Set default web dashboard port
-antigravity-account-switcher config set port 1831
-
-# Adjust background quota check interval
+antigravity-account-switcher config set port 8080
 antigravity-account-switcher config set quota_interval 60s
-```
-
-### Environment Variables
-
-| Variable | Description |
-| :--- | :--- |
-| `ANTIGRAVITY_BIN` | Explicit path to the Antigravity 2.0 executable. |
-| `ANTIGRAVITY_PORT` | Overrides the switcher listening port. |
-| `ANTIGRAVITY_DB_PATH` | Path to the SQLite database file (default: `~/.config/.../accounts.db`). |
-| `ANTIGRAVITY_CLIENT_ID` | Optional custom Google Cloud Console OAuth Client ID override. |
-| `ANTIGRAVITY_CLIENT_SECRET` | Optional custom Google Cloud Console OAuth Client Secret override. |
-
----
-
-## Architecture
-
-```text
-               +-----------------------------------+
-               |          Antigravity 2.0          |
-               |     (Child Process via Supervisor)|
-               +-----------------+-----------------+
-                                 | HTTP_PROXY / CLOUD_CODE_URL
-                                 v
-+------------------------------------------------------------------+
-|              ANTIGRAVITY ACCOUNT SWITCHER (Single Binary)        |
-|                                                                  |
-|   +--------------------+     +-------------------------------+   |
-|   |   Web Dashboard    |     |      In-Process Reverse Proxy |   |
-|   |  (HTML5/Tailwind)  |     | * Dynamic Bearer Token        |   |
-|   |  http://127.0.0.1  |     | * 100MB Replay Buffer         |   |
-|   +---------+----------+     | * RFC 7231 CONNECT Tunnel     |   |
-|             |                +---------------+---------------+   |
-|             v                                |                   |
-|   +--------------------+         HTTP 429    | SSE Tokens        |
-|   | SQLite WAL Store   |<--------------------+                   |
-|   | * accounts.db      |                     v                   |
-|   | * token telemetry  |     +-------------------------------+   |
-|   +---------+----------+     | Quota Poller Daemon           |   |
-|             ^                | * Auto-restore past reset     |   |
-|             +----------------+ * Official Google PA User-Agent|   |
-+----------------------------------------------+-------------------+
-                                               |
-                                               v
-                              +--------------------------------+
-                              | Google Cloud Code Infrastructure|
-                              +--------------------------------+
-```
-
----
-
-## Troubleshooting & FAQ
-
-#### 1. "Could not automatically locate Antigravity binary"
-If your Antigravity 2.0 installation is in a custom location, specify the path to the executable:
-```bash
 antigravity-account-switcher config set antigravity_bin /path/to/antigravity
+
+# quota thresholds (values from 0.0 to 1.0)
+antigravity-account-switcher config set quota_warning_threshold 0.80   # 🔔 warn at 80%
+antigravity-account-switcher config set quota_switch_threshold  0.85   # 🔁 switch at 85%
 ```
 
-#### 2. Does this interfere with native voice dictation (Speech-to-Text)?
-No. The switcher automatically sets `NO_PROXY=speech.googleapis.com` and provides raw RFC 7231 TCP tunneling on `CONNECT` requests, ensuring audio streaming functions with zero interference.
+**Environment variables:** `ANTIGRAVITY_BIN`, `ANTIGRAVITY_PORT`, `ANTIGRAVITY_DB_PATH`, `ANTIGRAVITY_CLIENT_ID`, `ANTIGRAVITY_CLIENT_SECRET`.
 
-#### 3. Where are my tokens and credentials stored?
-Tokens are stored strictly on your local filesystem in SQLite (`~/.config/antigravity-account-switcher/accounts.db`). No credentials or telemetry ever leave your machine.
+---
 
-#### 4. How do I completely uninstall and remove all data?
+## 🔒 Security & Privacy
+
+- 🛡️ **Secure OAuth2:** RFC 8252 loopback flow with PKCE (RFC 7636) — the IETF standard for native apps.
+- 🏠 **100% local:** credentials and tokens live only inside your `accounts.db` (SQLite) with restricted permissions.
+- 🚫 **Zero telemetry:** no data leaves your machine to third parties.
+
+See [SECURITY.md](SECURITY.md) for more.
+
+---
+
+## 🤝 Contributing
+
+We love contributions! 🎉 Check [CONTRIBUTING.md](CONTRIBUTING.md) to set up the environment, run the race-detector tests and open your PR.
+
 ```bash
-# 1. Remove desktop entry
-antigravity-account-switcher uninstall-desktop
-
-# 2. Remove binary
-make uninstall
-
-# 3. Purge configuration and database
-rm -rf ~/.config/antigravity-account-switcher
+go test ./...
 ```
 
-#### 5. Does the in-app auto-updater ("Check for Updates") work?
-Yes! On Linux, Antigravity 2.0 uses Electron's `AppImageUpdater`. When Antigravity is run from an extracted `.tar.gz` without an AppImage runtime, `Help -> Check for Updates` normally fails with `ERR_UPDATER_OLD_FILE_NOT_FOUND` because the `APPIMAGE` environment variable is missing.
+---
 
-**Antigravity Account Switcher fixes this automatically.** When launched via `antigravity-account-switcher launch` (or from the `.desktop` launcher created by `install-desktop`), the supervisor automatically injects the exact `APPIMAGE` binary path into the Antigravity 2.0 process, allowing automatic background and manual in-app updates to work seamlessly out-of-the-box.
+## ⭐ Enjoying it?
 
+Drop a ⭐ on the repo and share it with everyone who keeps getting 429s! 😄
 
 ---
 
-## Security
+## 📄 License
 
-Please see [SECURITY.md](SECURITY.md) for vulnerability disclosure procedures and details regarding RFC 8252 §8.5 OAuth 2.0 public client credentials.
-
----
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing with the Go data race detector, and PR guidelines.
-
----
-
-## License
-
-MIT License © 2026 Muriel Gasparini. See [LICENSE](LICENSE) for details.
+MIT © 2026 **Muriel Gasparini** — see [LICENSE](LICENSE).

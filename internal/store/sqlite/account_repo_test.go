@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/store/sqlite"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/store/sqlite"
 )
 
 func setupTestStore(t *testing.T) (*sqlite.DB, *sqlite.AccountRepository, *sqlite.QuotaRepository, *sqlite.MetricsRepository, *sqlite.EventRepository) {

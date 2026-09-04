@@ -15,12 +15,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/metrics"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/oauth"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/proxy"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/quota"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/store/sqlite"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/web"
+	"github.com/samucamg/antigravity-account-switcher/internal/metrics"
+	"github.com/samucamg/antigravity-account-switcher/internal/oauth"
+	"github.com/samucamg/antigravity-account-switcher/internal/proxy"
+	"github.com/samucamg/antigravity-account-switcher/internal/quota"
+	"github.com/samucamg/antigravity-account-switcher/internal/store/sqlite"
+	"github.com/samucamg/antigravity-account-switcher/internal/web"
 )
 
 // Config holds options for the Wrap supervisor.

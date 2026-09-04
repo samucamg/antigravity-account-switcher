@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/metrics"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/proxy"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/store/sqlite"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/metrics"
+	"github.com/samucamg/antigravity-account-switcher/internal/proxy"
+	"github.com/samucamg/antigravity-account-switcher/internal/store/sqlite"
 )
 
 func setupTestWeb(t *testing.T) (*sqlite.DB, domain.AccountRepository, domain.QuotaRepository, domain.MetricsRepository, *metrics.Service, *proxy.Broadcaster, domain.EventRepository) {

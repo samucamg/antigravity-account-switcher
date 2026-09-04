@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/test/mocks"
+	"github.com/samucamg/antigravity-account-switcher/test/mocks"
 )
 
 func TestMockGoogleServer_StreamGenerateContent_SSE(t *testing.T) {

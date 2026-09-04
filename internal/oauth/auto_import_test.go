@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/store/sqlite"
+	"github.com/samucamg/antigravity-account-switcher/internal/store/sqlite"
 )
 
 func TestAutoImportExistingAccount(t *testing.T) {

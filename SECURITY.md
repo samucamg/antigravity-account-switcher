@@ -4,7 +4,7 @@
 
 We take the security of Antigravity Account Switcher seriously. If you believe you have found a security vulnerability, please report it responsibly:
 
-- **Preferred:** Open a private vulnerability report via [GitHub Security Advisories](https://github.com/Muriel-Gasparini/antigravity-account-switcher/security/advisories/new).
+- **Preferred:** Open a private vulnerability report via [GitHub Security Advisories](https://github.com/samucamg/antigravity-account-switcher/security/advisories/new).
 - **Direct Email:** Contact Muriel Gasparini at `muriel.developer@gmail.com` with the subject `[SECURITY] Antigravity Account Switcher`.
 
 Please include:

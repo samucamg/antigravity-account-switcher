@@ -22,7 +22,7 @@ Relatórios de bugs, sugestões de melhorias, atualizações de documentação e
 
 1. **Faça o Fork e Clone o Repositório:**
    ```bash
-   git clone https://github.com/Muriel-Gasparini/antigravity-account-switcher.git
+   git clone https://github.com/samucamg/antigravity-account-switcher.git
    cd antigravity-account-switcher
    ```
 

@@ -13,10 +13,10 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Linux_%7C_Windows_%7C_macOS-6f42c1?style=plastic&logo=linux&logoColor=white" alt="platform"/>
-  <img src="https://img.shields.io/github/go-mod/go-version/Muriel-Gasparini/antigravity-account-switcher?style=plastic&logo=go&label=Go" alt="go version"/>
-  <img src="https://img.shields.io/github/license/Muriel-Gasparini/antigravity-account-switcher?style=plastic&color=blue" alt="license"/>
-  <img src="https://img.shields.io/github/stars/Muriel-Gasparini/antigravity-account-switcher?style=plastic&logo=github" alt="stars"/>
-  <img src="https://github.com/Muriel-Gasparini/antigravity-account-switcher/actions/workflows/ci.yml/badge.svg" alt="CI"/>
+  <img src="https://img.shields.io/github/go-mod/go-version/samucamg/antigravity-account-switcher?style=plastic&logo=go&label=Go" alt="go version"/>
+  <img src="https://img.shields.io/github/license/samucamg/antigravity-account-switcher?style=plastic&color=blue" alt="license"/>
+  <img src="https://img.shields.io/github/stars/samucamg/antigravity-account-switcher?style=plastic&logo=github" alt="stars"/>
+  <img src="https://github.com/samucamg/antigravity-account-switcher/actions/workflows/ci.yml/badge.svg" alt="CI"/>
 </p>
 
 <p align="center">
@@ -77,7 +77,7 @@ The switcher is a **transparent local supervisor** that sits between Antigravity
 ### 🐧 Linux / macOS
 
 ```bash
-git clone https://github.com/Muriel-Gasparini/antigravity-account-switcher.git
+git clone https://github.com/samucamg/antigravity-account-switcher.git
 cd antigravity-account-switcher
 make install        # static binary → ~/.local/bin
 ```
@@ -87,7 +87,7 @@ make install        # static binary → ~/.local/bin
 **Option A — build on Windows (PowerShell or CMD):**
 
 ```powershell
-git clone https://github.com/Muriel-Gasparini/antigravity-account-switcher.git
+git clone https://github.com/samucamg/antigravity-account-switcher.git
 cd antigravity-account-switcher
 go build -o antigravity-account-switcher.exe ./cmd/antigravity-account-switcher
 .\antigravity-account-switcher.exe serve

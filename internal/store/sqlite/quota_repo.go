@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
 )
 
 // QuotaRepository implements domain.QuotaRepository backed by SQLite.

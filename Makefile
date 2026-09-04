@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-MODULE := github.com/Muriel-Gasparini/antigravity-account-switcher
+MODULE := github.com/samucamg/antigravity-account-switcher
 CMD_PKG := ./cmd/antigravity-account-switcher
 BINARY := bin/antigravity-account-switcher
 

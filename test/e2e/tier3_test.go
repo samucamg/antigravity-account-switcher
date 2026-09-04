@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/web"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/test/mocks"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/web"
+	"github.com/samucamg/antigravity-account-switcher/test/mocks"
 )
 
 // TestTier3_QuotaPoller_AutoRestore validates that the background quota daemon

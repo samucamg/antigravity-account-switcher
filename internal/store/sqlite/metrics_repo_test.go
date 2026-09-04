@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
 )
 
 func TestMetricsRepository_RecordAndSummary(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
 )
 
 // ACPTokenFile represents the JSON structure used by Antigravity in ~/.gemini/antigravity-acp/acp_token.json.

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
 )
 
 // RawUsageMetadata represents the JSON structure of usageMetadata in Cloud Code PA and Gemini SSE chunks.

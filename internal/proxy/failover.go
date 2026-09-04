@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
 )
 
 // IsExhaustionResponse checks whether an HTTP status code and response body

@@ -22,7 +22,7 @@ We welcome bug reports, improvements, documentation updates, and feature request
 
 1. **Fork and Clone:**
    ```bash
-   git clone https://github.com/Muriel-Gasparini/antigravity-account-switcher.git
+   git clone https://github.com/samucamg/antigravity-account-switcher.git
    cd antigravity-account-switcher
    ```
 

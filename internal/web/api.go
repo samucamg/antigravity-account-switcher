@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/oauth"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/oauth"
 )
 
 // APIHandler implements the REST endpoints and SSE real-time streaming for the switcher.

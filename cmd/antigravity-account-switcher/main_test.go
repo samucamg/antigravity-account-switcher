@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/store/sqlite"
+	"github.com/samucamg/antigravity-account-switcher/internal/store/sqlite"
 )
 
 func captureStdout(f func()) string {

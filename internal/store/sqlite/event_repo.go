@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
 )
 
 // EventRepository implements domain.EventRepository backed by SQLite.

@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/config"
+	"github.com/samucamg/antigravity-account-switcher/internal/config"
 )
 
 // DesktopOptions configures the generation of the .desktop application entry.

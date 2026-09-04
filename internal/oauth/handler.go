@@ -95,7 +95,40 @@ func discoverFromIDEBundle() (string, string) {
 	if err != nil {
 		return "", ""
 	}
-	candidates := []string{
+	candidates := []string{}
+
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+		candidates = append(candidates,
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "resources", "bin", "language_server.exe"),
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "resources", "bin", "language_server"),
+			filepath.Join(localAppData, "Programs", "Antigravity", "resources", "bin", "language_server.exe"),
+			filepath.Join(localAppData, "Programs", "Antigravity", "resources", "bin", "language_server"),
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "resources", "app", "out", "main.js"),
+			filepath.Join(localAppData, "Programs", "Antigravity", "resources", "app", "out", "main.js"),
+		)
+	}
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		candidates = append(candidates,
+			filepath.Join(appData, "Antigravity IDE", "resources", "bin", "language_server.exe"),
+			filepath.Join(appData, "Antigravity", "resources", "bin", "language_server.exe"),
+			filepath.Join(appData, "Antigravity IDE", "resources", "app", "out", "main.js"),
+		)
+	}
+	if progFiles := os.Getenv("ProgramFiles"); progFiles != "" {
+		candidates = append(candidates,
+			filepath.Join(progFiles, "Antigravity IDE", "resources", "bin", "language_server.exe"),
+			filepath.Join(progFiles, "Antigravity", "resources", "bin", "language_server.exe"),
+			filepath.Join(progFiles, "Antigravity IDE", "resources", "app", "out", "main.js"),
+		)
+	}
+	if progFilesX86 := os.Getenv("ProgramFiles(x86)"); progFilesX86 != "" {
+		candidates = append(candidates,
+			filepath.Join(progFilesX86, "Antigravity IDE", "resources", "bin", "language_server.exe"),
+			filepath.Join(progFilesX86, "Antigravity", "resources", "bin", "language_server.exe"),
+		)
+	}
+
+	candidates = append(candidates,
 		// Antigravity 2.0 language_server binary paths
 		filepath.Join(home, ".local", "share", "antigravity", "resources", "bin", "language_server"),
 		filepath.Join(home, ".local", "share", "antigravity", "Antigravity-x64", "resources", "bin", "language_server"),
@@ -109,7 +142,7 @@ func discoverFromIDEBundle() (string, string) {
 		"/opt/Antigravity/resources/app/out/main.js",
 		"/usr/share/antigravity-ide/resources/app/out/main.js",
 		"/Applications/Antigravity.app/Contents/Resources/app/out/main.js",
-	}
+	)
 
 	reID := regexp.MustCompile(`(\d+-[a-z0-9_]+\.apps\.googleusercontent\.com)`)
 	prefix := string([]byte{0x47, 0x4f, 0x43, 0x53, 0x50, 0x58, 0x2d}) // native client secret prefix bytes

@@ -35,6 +35,21 @@ func FindExistingACPTokenFile() string {
 		filepath.Join(home, ".gemini", "antigravity-cli", "acp_token.json"),
 	}
 
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+		candidates = append(candidates,
+			filepath.Join(localAppData, "Antigravity", "acp_token.json"),
+			filepath.Join(localAppData, "Antigravity IDE", "acp_token.json"),
+			filepath.Join(localAppData, "gemini", "antigravity-acp", "acp_token.json"),
+		)
+	}
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		candidates = append(candidates,
+			filepath.Join(appData, "Antigravity", "acp_token.json"),
+			filepath.Join(appData, "Antigravity IDE", "acp_token.json"),
+			filepath.Join(appData, "gemini", "antigravity-acp", "acp_token.json"),
+		)
+	}
+
 	for _, p := range candidates {
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Size() > 0 {
 			return p

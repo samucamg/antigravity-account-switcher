@@ -138,6 +138,31 @@ func CandidateAntigravityPaths() []string {
 	home, _ := os.UserHomeDir()
 	candidates := []string{}
 
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+		candidates = append(candidates,
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "antigravity.exe"),
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "Antigravity IDE.exe"),
+			filepath.Join(localAppData, "Programs", "Antigravity", "antigravity.exe"),
+			filepath.Join(localAppData, "Programs", "Antigravity", "Antigravity.exe"),
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "bin", "antigravity.cmd"),
+			filepath.Join(localAppData, "Programs", "Antigravity", "bin", "antigravity.cmd"),
+		)
+	}
+	if progFiles := os.Getenv("ProgramFiles"); progFiles != "" {
+		candidates = append(candidates,
+			filepath.Join(progFiles, "Antigravity IDE", "antigravity.exe"),
+			filepath.Join(progFiles, "Antigravity IDE", "Antigravity IDE.exe"),
+			filepath.Join(progFiles, "Antigravity", "antigravity.exe"),
+			filepath.Join(progFiles, "Antigravity", "Antigravity.exe"),
+		)
+	}
+	if progFilesX86 := os.Getenv("ProgramFiles(x86)"); progFilesX86 != "" {
+		candidates = append(candidates,
+			filepath.Join(progFilesX86, "Antigravity IDE", "antigravity.exe"),
+			filepath.Join(progFilesX86, "Antigravity", "antigravity.exe"),
+		)
+	}
+
 	if home != "" {
 		candidates = append(candidates,
 			// 1. Standard XDG user application directories (Recommended, no sudo)

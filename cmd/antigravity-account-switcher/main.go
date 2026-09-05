@@ -176,7 +176,7 @@ func runServe(args []string) {
 		accRepo,
 		broadcaster,
 		eventRepo,
-		proxy.WithQuotaRepository(quotaRepo),
+		proxy.WithFailoverQuotaRepository(quotaRepo),
 		proxy.WithModelFallback(cfg.ModelPrimary, cfg.ModelSecondary, cfg.FallbackSecondaryEnabled),
 	)
 	tunnelManager := tunnel.NewManager()

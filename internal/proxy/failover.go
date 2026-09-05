@@ -90,10 +90,10 @@ type accountFallbackState struct {
 // FailoverOption provides functional options to configure FailoverEngine.
 type FailoverOption func(*FailoverEngine)
 
-// WithQuotaRepository configures the QuotaRepository for bucket inspection.
-func WithQuotaRepository(repo domain.QuotaRepository) FailoverOption {
-	return func(f *FailoverEngine) {
-		f.quotaRepo = repo
+// WithFailoverQuotaRepository configures the QuotaRepository for bucket inspection.
+func WithFailoverQuotaRepository(repo domain.QuotaRepository) FailoverOption {
+	return func(fe *FailoverEngine) {
+		fe.quotaRepo = repo
 	}
 }
 

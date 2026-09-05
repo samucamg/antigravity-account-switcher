@@ -27,6 +27,8 @@ const (
 	EventTypeRequestSuccess EventType = "request_success"
 	// EventTypeTokensCaptured denotes token usage metadata successfully captured from SSE stream.
 	EventTypeTokensCaptured EventType = "tokens_captured"
+	// EventTypeModelFallback denotes an intra-account fallback to a secondary model.
+	EventTypeModelFallback EventType = "model_fallback"
 	// EventTypeError denotes a proxy or system operational error.
 	EventTypeError EventType = "error"
 )

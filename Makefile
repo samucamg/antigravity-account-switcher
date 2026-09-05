@@ -5,7 +5,7 @@ BINARY := bin/antigravity-account-switcher
 
 GOLANGCI_LINT ?= go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6 run ./...
 
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0-dev")
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.2.0")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
@@ -14,7 +14,7 @@ LDFLAGS := -s -w \
 	-X main.Commit=$(COMMIT) \
 	-X main.Date=$(DATE)
 
-.PHONY: all build build-static test test-race test-cover lint tidy clean run wrap help
+.PHONY: all build build-static test test-race test-cover lint fmt tidy clean run wrap help
 
 all: build
 
@@ -48,6 +48,10 @@ test-cover:
 lint:
 	go vet ./...
 	$(GOLANGCI_LINT)
+
+## fmt: Formats all Go source files with canonical gofmt rules
+fmt:
+	gofmt -s -w .
 
 ## tidy: Ensures go.mod and go.sum consistency
 tidy:

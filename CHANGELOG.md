@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-05
+
+### Added
+- **Multi-Tier Model Fallback:** Zero-allocation in-flight request rewriter and intelligent intra-account failover engine. When primary model quota exhausts (HTTP 429 / 403 RESOURCE_EXHAUSTED), requests seamlessly fall back to secondary model (e.g., Gemini Pro -> Flash) on the same account before rotating accounts.
+- **Model Routing Dashboard & CLI:** Web dashboard controls with toggle, primary/secondary model selectors, live model discovery from local Language Server/Cloud Code, and CLI flags (`--fallback-secondary`, `--model-primary`, `--model-secondary`).
+- **Cloudflare Tunnels Integration:** Hybrid tunneling module supporting 1-click Quick Tunnels (`trycloudflare.com`) without account requirements, as well as Cloudflare Zero Trust Named Tunnels with tokens for custom fixed domains.
+- **1-Click Windows Launcher (`start.bat`):** Standalone zero-setup batch launcher with dynamic IDE path resolution (no hardcoded user paths), silent background daemon, and automated browser launch.
+- **Automated Desktop Shortcut:** `install.ps1` automatically creates `Antigravity (Multi-Account).lnk` on the Windows Desktop with the official Antigravity icon.
+- **Client Timezone Awareness:** SQLite strftime daily bucket grouping now respects client local timezone (`?tz=...` and `tz_offset=...`), ensuring token usage metrics accurately reflect user local calendar days.
+- **AI Agent Harmonization:** Added canonical `AGENTS.md` spec and IDE rules for Cursor (`.cursorrules`), Windsurf (`.windsurfrules`), Claude Code (`CLAUDE.md`), and GitHub Copilot (`copilot-instructions.md`).
+
+### Changed
+- **Extended Quota Network Resilience:** Increased quota client HTTP timeout from 15s to 30s (`DefaultHTTPTimeout`) to absorb upstream Google Cloud Code PA latency spikes, and adjusted default polling interval to 5m.
+- **Format Target:** Added `make fmt` target (`gofmt -s -w .`) to Makefile.
+
 ## [0.1.0] - 2026-09-04
 
 ### Added

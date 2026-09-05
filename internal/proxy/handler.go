@@ -71,6 +71,11 @@ func WithQuotaSwitchThreshold(t float64) Option {
 	return func(c *Config) { c.QuotaSwitchThreshold = t }
 }
 
+// WithQuotaThresholds configures warning and proactive switch thresholds.
+func WithQuotaThresholds(warning, switchThreshold float64) Option {
+	return func(c *Config) { c.QuotaSwitchThreshold = switchThreshold }
+}
+
 // WithTokenRefresher injects a TokenRefresher for proactive and reactive token renewal.
 func WithTokenRefresher(refresher TokenRefresher) Option {
 	return func(c *Config) { c.TokenRefresher = refresher }

@@ -38,14 +38,28 @@ Write-Host "Server running at http://127.0.0.1:$port/" -ForegroundColor Green
 Start-Process "http://127.0.0.1:$($port)/"
 Write-Host "Dashboard opened in browser." -ForegroundColor Green
 
-# Launch IDE with proxy environment
-$ideBin = "C:\Users\samuc\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe"
+# Discover IDE binary path dynamically
+$ideCandidates = @(
+    "$env:LOCALAPPDATA\Programs\Antigravity\Antigravity.exe",
+    "$env:LOCALAPPDATA\Programs\Antigravity IDE\Antigravity IDE.exe",
+    "$env:ProgramFiles\Antigravity\Antigravity.exe",
+    "$env:ProgramFiles\Antigravity IDE\Antigravity IDE.exe",
+    "${env:ProgramFiles(x86)}\Antigravity\Antigravity.exe"
+)
+$ideBin = ""
+foreach ($cand in $ideCandidates) {
+    if (Test-Path $cand) {
+        $ideBin = $cand
+        break
+    }
+}
 
-if ($ideBin -eq '' -or -not (Test-Path $ideBin)) {
-    Write-Host "IDE not found. Edit start.ps1 and set the ideBin path." -ForegroundColor Yellow
-    Write-Host "Server still running at http://127.0.0.1:$port/" -ForegroundColor Cyan
+if ($ideBin -eq '') {
+    Write-Host "Antigravity IDE binary not found in standard paths." -ForegroundColor Yellow
+    Write-Host "Proxy server is running at http://127.0.0.1:$port/" -ForegroundColor Cyan
     exit 0
 }
+Write-Host "Detected IDE: $ideBin" -ForegroundColor Green
 
 $env:HTTP_PROXY     = "http://127.0.0.1:$port"
 $env:HTTPS_PROXY    = "http://127.0.0.1:$port"

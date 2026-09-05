@@ -38,8 +38,10 @@ Write-Host "  OK: port = 1831" -ForegroundColor Green
 Write-Host ""
 Write-Host "[4/5] Detecting Antigravity IDE..." -ForegroundColor Yellow
 $idePaths = @(
-    "$env:LOCALAPPDATA\Programs\Antigravity IDE\Antigravity IDE.exe",
     "$env:LOCALAPPDATA\Programs\Antigravity\Antigravity.exe",
+    "$env:LOCALAPPDATA\Programs\Antigravityntigravity.exe",
+    "$env:LOCALAPPDATA\Programs\Antigravity IDE\Antigravity IDE.exe",
+    "C:\Program Files\Antigravity\Antigravity.exe",
     "C:\Program Files\Antigravity IDE\Antigravity IDE.exe"
 )
 $detectedIDE = ""
@@ -106,13 +108,32 @@ if (`$args.Count -eq 0) { & `$exe list-accounts } else { & `$exe switch-account 
 [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot 'switch-account.ps1'), $switchContent, $enc)
 Write-Host "  OK: switch-account.ps1" -ForegroundColor Green
 
+# Create Desktop Shortcut for 1-Click Launch
+try {
+    $desktopDir = [Environment]::GetFolderPath("Desktop")
+    $shortcutPath = Join-Path $desktopDir "Antigravity (Multi-Account).lnk"
+    $wsh = New-Object -ComObject WScript.Shell
+    $shortcut = $wsh.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = Join-Path $PSScriptRoot "start.bat"
+    $shortcut.WorkingDirectory = $PSScriptRoot
+    $shortcut.Description = "Iniciar Google Antigravity 2.0 com Proxy Multi-Account"
+    if ($detectedIDE -ne '' -and (Test-Path $detectedIDE)) {
+        $shortcut.IconLocation = "$detectedIDE,0"
+    }
+    $shortcut.Save()
+    Write-Host "  OK: Atalho criado na Area de Trabalho ('Antigravity (Multi-Account).lnk')" -ForegroundColor Green
+} catch {
+    Write-Host "  AVISO: Nao foi possivel criar o atalho na Area de Trabalho: $_" -ForegroundColor Yellow
+}
+
 Write-Host ""
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "  Setup Complete!" -ForegroundColor Green
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  .\add-account.ps1                    -> add Google account" -ForegroundColor Cyan
+Write-Host "  start.bat                            -> 1-click startup (or double-click Desktop shortcut)" -ForegroundColor Cyan
 Write-Host "  .\start.ps1                          -> start server + dashboard + launch IDE" -ForegroundColor Cyan
+Write-Host "  .\add-account.ps1                    -> add Google account" -ForegroundColor Cyan
 Write-Host "  .\switch-account.ps1                 -> list accounts" -ForegroundColor Cyan
 Write-Host "  .\switch-account.ps1 email@gmail.com -> switch active account" -ForegroundColor Cyan
 Write-Host ""

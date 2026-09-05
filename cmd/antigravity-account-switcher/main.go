@@ -20,12 +20,13 @@ import (
 	"github.com/samucamg/antigravity-account-switcher/internal/proxy"
 	"github.com/samucamg/antigravity-account-switcher/internal/quota"
 	"github.com/samucamg/antigravity-account-switcher/internal/store/sqlite"
+	"github.com/samucamg/antigravity-account-switcher/internal/tunnel"
 	"github.com/samucamg/antigravity-account-switcher/internal/web"
 )
 
 var (
 	// Build information injected via -ldflags during compilation.
-	Version = "0.1.0-dev"
+	Version = "0.2.0"
 	Commit  = "unknown"
 	Date    = "unknown"
 )
@@ -106,20 +107,34 @@ func defaultDBPath() string {
 	return config.DefaultDBPath()
 }
 
+// addModelFlags registers model fallback flags on the provided FlagSet.
+func addModelFlags(fs *flag.FlagSet, cfg *config.Config) (fallbackSecondary *bool, modelPrimary *string, modelSecondary *string) {
+	fallbackSecondary = fs.Bool("fallback-secondary", cfg.FallbackSecondaryEnabled, "Enable intra-account secondary model fallback before account rotation")
+	modelPrimary = fs.String("model-primary", cfg.ModelPrimary, "Primary model identifier")
+	modelSecondary = fs.String("model-secondary", cfg.ModelSecondary, "Secondary model fallback identifier")
+	return
+}
+
 func runServe(args []string) {
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load configuration: %v\n", err)
+	}
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
 	defaultPort := 8080
-	if cfg != nil && cfg.Port > 0 {
+	if cfg.Port > 0 {
 		defaultPort = cfg.Port
 	}
-	defaultPollInterval := 60 * time.Second
-	if cfg != nil && cfg.QuotaInterval != "" {
+	defaultPollInterval := quota.DefaultPollInterval
+	if cfg.QuotaInterval != "" {
 		if d, err := time.ParseDuration(cfg.QuotaInterval); err == nil {
 			defaultPollInterval = d
 		}
 	}
 	defaultTargetURL := proxy.DefaultTargetURL
-	if cfg != nil && cfg.UpstreamURL != "" {
+	if cfg.UpstreamURL != "" {
 		defaultTargetURL = cfg.UpstreamURL
 	}
 
@@ -129,7 +144,14 @@ func runServe(args []string) {
 	dbPath := fs.String("db", defaultDBPath(), "Path to SQLite database file")
 	pollInterval := fs.Duration("poll-interval", defaultPollInterval, "Background quota polling interval")
 	targetURL := fs.String("target-url", defaultTargetURL, "Google Cloud Code PA upstream target")
+	fallbackSecondary, modelPrimary, modelSecondary := addModelFlags(fs, cfg)
 	_ = fs.Parse(args)
+
+	cfg.Port = *port
+	cfg.UpstreamURL = *targetURL
+	cfg.FallbackSecondaryEnabled = *fallbackSecondary
+	cfg.ModelPrimary = *modelPrimary
+	cfg.ModelSecondary = *modelSecondary
 
 	fmt.Printf("Initializing Antigravity Account Switcher v%s...\n", Version)
 	fmt.Printf("Database: %s\n", *dbPath)
@@ -150,7 +172,15 @@ func runServe(args []string) {
 	eventRepo := sqlite.NewEventRepository(db)
 
 	broadcaster := proxy.NewBroadcaster(100)
-	failoverEngine := proxy.NewFailoverEngine(accRepo, broadcaster, eventRepo)
+	failoverEngine := proxy.NewFailoverEngine(
+		accRepo,
+		broadcaster,
+		eventRepo,
+		proxy.WithQuotaRepository(quotaRepo),
+		proxy.WithModelFallback(cfg.ModelPrimary, cfg.ModelSecondary, cfg.FallbackSecondaryEnabled),
+	)
+	tunnelManager := tunnel.NewManager()
+	defer func() { _ = tunnelManager.Stop() }()
 	oauthService := oauth.NewOAuthService(accRepo)
 
 	// Automatically import existing Antigravity login if pool is empty
@@ -216,6 +246,9 @@ func runServe(args []string) {
 		web.WithVersion(Version),
 		web.WithProxyHandler(proxyHandler),
 		web.WithPoller(poller),
+		web.WithConfig(cfg),
+		web.WithFallbackConfigSetter(failoverEngine),
+		web.WithTunnelManager(tunnelManager),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating web server: %v\n", err)
@@ -232,6 +265,16 @@ func runServe(args []string) {
 	fmt.Printf("    Web Dashboard: http://%s:%d/\n", *bind, boundPort)
 	fmt.Printf("    Proxy Port:    http://%s:%d/\n", *bind, boundPort)
 	fmt.Printf("    Quota Daemon:  Active (interval: %v)\n", *pollInterval)
+	if cfg.FallbackSecondaryEnabled {
+		fmt.Printf("    Model Fallback: Enabled (%s -> %s)\n", cfg.ModelPrimary, cfg.ModelSecondary)
+	} else {
+		fmt.Printf("    Model Fallback: Disabled (Primary: %s)\n", cfg.ModelPrimary)
+	}
+	if detected, p := tunnel.DetectCloudflared(); detected {
+		fmt.Printf("    Cloudflare Tunnel: Ready (found at %s)\n", p)
+	} else {
+		fmt.Printf("    Cloudflare Tunnel: Available (install cloudflared for 1-click tunnels)\n")
+	}
 	fmt.Println("\nPress Ctrl+C to stop.")
 
 	<-ctx.Done()
@@ -247,7 +290,7 @@ func runServe(args []string) {
 
 func runWrap(args []string) {
 	cfg, _ := config.Load()
-	defaultPollInterval := 60 * time.Second
+	defaultPollInterval := quota.DefaultPollInterval
 	if cfg != nil && cfg.QuotaInterval != "" {
 		if d, err := time.ParseDuration(cfg.QuotaInterval); err == nil {
 			defaultPollInterval = d
@@ -522,7 +565,7 @@ func runStatus(args []string) {
 func runLaunch(args []string) {
 	cfg, _ := config.Load()
 
-	defaultPollInterval := 60 * time.Second
+	defaultPollInterval := quota.DefaultPollInterval
 	if cfg != nil && cfg.QuotaInterval != "" {
 		if d, err := time.ParseDuration(cfg.QuotaInterval); err == nil {
 			defaultPollInterval = d

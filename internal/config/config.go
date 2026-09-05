@@ -7,28 +7,37 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 )
 
 const (
 	DefaultPort        = 8080
 	DefaultUpstreamURL = "https://daily-cloudcode-pa.googleapis.com"
-	DefaultInterval    = "60s"
+	DefaultInterval    = "5m"
 	DefaultQuotaWarningThreshold = 0.80 // 80% usage threshold for alert
 	DefaultQuotaSwitchThreshold  = 0.85 // 85% usage threshold for proactive account rotation
+	DefaultModelPrimary          = "gemini-2.5-pro"
+	DefaultModelSecondary        = "gemini-2.5-flash"
+	DefaultFallbackSecondaryEnabled = false
 	ConfigFileName     = "config.json"
 	DefaultDBFileName  = "accounts.db"
 )
 
 // Config holds persistent user configuration.
 type Config struct {
-	Port           int    `json:"port"`
-	DBPath         string `json:"db_path"`
-	AntigravityBin string `json:"antigravity_bin"`
-	UpstreamURL    string `json:"upstream_url"`
+	Port                  int     `json:"port"`
+	DBPath                string  `json:"db_path"`
+	AntigravityBin        string  `json:"antigravity_bin"`
+	UpstreamURL           string  `json:"upstream_url"`
 	QuotaInterval         string  `json:"quota_interval"`
 	QuotaWarningThreshold float64 `json:"quota_warning_threshold"`
 	QuotaSwitchThreshold  float64 `json:"quota_switch_threshold"`
-	OpenBrowser    bool   `json:"open_browser"`
+	OpenBrowser           bool    `json:"open_browser"`
+	ModelPrimary          string  `json:"model_primary,omitempty"`
+	ModelSecondary        string  `json:"model_secondary,omitempty"`
+	FallbackSecondaryEnabled bool `json:"fallback_secondary_enabled"`
+	CloudflareTunnelToken string  `json:"cloudflare_tunnel_token,omitempty"`
+	RemoteAuthToken       string  `json:"remote_auth_token,omitempty"`
 }
 
 // ConfigDir returns the default configuration directory (~/.config/antigravity-account-switcher).
@@ -59,13 +68,29 @@ func DefaultDBPath() string {
 // DefaultConfig returns an initialized Config struct with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		Port:           DefaultPort,
-		DBPath:         DefaultDBPath(),
-		AntigravityBin: "",
-		UpstreamURL:    DefaultUpstreamURL,
+		Port:                  DefaultPort,
+		DBPath:                DefaultDBPath(),
+		AntigravityBin:        "",
+		UpstreamURL:           DefaultUpstreamURL,
 		QuotaInterval:         DefaultInterval,
 		QuotaWarningThreshold: DefaultQuotaWarningThreshold,
 		QuotaSwitchThreshold:  DefaultQuotaSwitchThreshold,
+		OpenBrowser:           false,
+		ModelPrimary:          DefaultModelPrimary,
+		ModelSecondary:        DefaultModelSecondary,
+		FallbackSecondaryEnabled: DefaultFallbackSecondaryEnabled,
+	}
+}
+
+// ParseBool parses string representations of boolean values.
+func ParseBool(val string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(val)) {
+	case "1", "t", "true", "yes", "y", "on":
+		return true, nil
+	case "0", "f", "false", "no", "n", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("cannot parse %q as boolean", val)
 	}
 }
 
@@ -109,6 +134,30 @@ func Load() (*Config, error) {
 	if envUpstream := os.Getenv("ANTIGRAVITY_UPSTREAM_URL"); envUpstream != "" {
 		cfg.UpstreamURL = envUpstream
 	}
+	if envPrimary := os.Getenv("ANTIGRAVITY_MODEL_PRIMARY"); envPrimary != "" {
+		cfg.ModelPrimary = strings.TrimSpace(envPrimary)
+	}
+	if envSecondary := os.Getenv("ANTIGRAVITY_MODEL_SECONDARY"); envSecondary != "" {
+		cfg.ModelSecondary = strings.TrimSpace(envSecondary)
+	}
+	if envFallback := os.Getenv("ANTIGRAVITY_FALLBACK_SECONDARY_ENABLED"); envFallback != "" {
+		if b, err := ParseBool(envFallback); err == nil {
+			cfg.FallbackSecondaryEnabled = b
+		}
+	}
+	if envTunnelToken := os.Getenv("ANTIGRAVITY_CLOUDFLARE_TUNNEL_TOKEN"); envTunnelToken != "" {
+		cfg.CloudflareTunnelToken = strings.TrimSpace(envTunnelToken)
+	}
+	if envAuthToken := os.Getenv("ANTIGRAVITY_REMOTE_AUTH_TOKEN"); envAuthToken != "" {
+		cfg.RemoteAuthToken = strings.TrimSpace(envAuthToken)
+	}
+
+	if cfg.ModelPrimary == "" {
+		cfg.ModelPrimary = DefaultModelPrimary
+	}
+	if cfg.ModelSecondary == "" {
+		cfg.ModelSecondary = DefaultModelSecondary
+	}
 
 	return cfg, nil
 }
@@ -140,20 +189,20 @@ func CandidateAntigravityPaths() []string {
 
 	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
 		candidates = append(candidates,
-			filepath.Join(localAppData, "Programs", "Antigravity IDE", "antigravity.exe"),
-			filepath.Join(localAppData, "Programs", "Antigravity IDE", "Antigravity IDE.exe"),
-			filepath.Join(localAppData, "Programs", "Antigravity", "antigravity.exe"),
 			filepath.Join(localAppData, "Programs", "Antigravity", "Antigravity.exe"),
-			filepath.Join(localAppData, "Programs", "Antigravity IDE", "bin", "antigravity.cmd"),
+			filepath.Join(localAppData, "Programs", "Antigravity", "antigravity.exe"),
 			filepath.Join(localAppData, "Programs", "Antigravity", "bin", "antigravity.cmd"),
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "Antigravity IDE.exe"),
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "antigravity.exe"),
+			filepath.Join(localAppData, "Programs", "Antigravity IDE", "bin", "antigravity.cmd"),
 		)
 	}
 	if progFiles := os.Getenv("ProgramFiles"); progFiles != "" {
 		candidates = append(candidates,
-			filepath.Join(progFiles, "Antigravity IDE", "antigravity.exe"),
-			filepath.Join(progFiles, "Antigravity IDE", "Antigravity IDE.exe"),
-			filepath.Join(progFiles, "Antigravity", "antigravity.exe"),
 			filepath.Join(progFiles, "Antigravity", "Antigravity.exe"),
+			filepath.Join(progFiles, "Antigravity", "antigravity.exe"),
+			filepath.Join(progFiles, "Antigravity IDE", "Antigravity IDE.exe"),
+			filepath.Join(progFiles, "Antigravity IDE", "antigravity.exe"),
 		)
 	}
 	if progFilesX86 := os.Getenv("ProgramFiles(x86)"); progFilesX86 != "" {
@@ -240,7 +289,8 @@ func ResolveAntigravityBin(explicitOverride string) (string, error) {
 	// Probe candidate filesystem locations
 	for _, candidate := range CandidateAntigravityPaths() {
 		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
-			if fi.Mode()&0o111 != 0 {
+			// On Windows, os.Stat does not report POSIX exec bits for .exe files.
+			if runtime.GOOS == "windows" || fi.Mode()&0o111 != 0 {
 				return filepath.Abs(candidate)
 			}
 		}

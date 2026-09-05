@@ -15,8 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/samucamg/antigravity-account-switcher/internal/config"
 	"github.com/samucamg/antigravity-account-switcher/internal/domain"
 	"github.com/samucamg/antigravity-account-switcher/internal/oauth"
+	"github.com/samucamg/antigravity-account-switcher/internal/tunnel"
 )
 
 //go:embed dist/*
@@ -24,13 +26,16 @@ var embeddedDistFS embed.FS
 
 // ServerConfig holds configuration options for Server.
 type ServerConfig struct {
-	Port         int
-	BindAddr     string
-	Version      string
-	ProxyHandler http.Handler
-	Poller       QuotaPoller
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
+	Port           int
+	BindAddr       string
+	Version        string
+	ProxyHandler   http.Handler
+	Poller         QuotaPoller
+	AppConfig      *config.Config
+	FallbackSetter FallbackConfigSetter
+	TunnelManager  *tunnel.Manager
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
 }
 
 // Option configures ServerConfig.
@@ -54,6 +59,21 @@ func WithVersion(v string) Option {
 // WithProxyHandler mounts a reverse proxy handler to intercept Cloud Code traffic on the same port.
 func WithProxyHandler(h http.Handler) Option {
 	return func(c *ServerConfig) { c.ProxyHandler = h }
+}
+
+// WithConfig sets the persistent application configuration.
+func WithConfig(cfg *config.Config) Option {
+	return func(c *ServerConfig) { c.AppConfig = cfg }
+}
+
+// WithFallbackConfigSetter sets the dynamic model fallback configuration setter.
+func WithFallbackConfigSetter(setter FallbackConfigSetter) Option {
+	return func(c *ServerConfig) { c.FallbackSetter = setter }
+}
+
+// WithTunnelManager sets the cloudflare tunnel manager.
+func WithTunnelManager(m *tunnel.Manager) Option {
+	return func(c *ServerConfig) { c.TunnelManager = m }
 }
 
 // WithReadTimeout sets the HTTP read timeout.
@@ -124,6 +144,15 @@ func NewServer(
 	if cfg.Poller != nil {
 		api.SetPoller(cfg.Poller)
 	}
+	if cfg.AppConfig != nil {
+		api.SetConfig(cfg.AppConfig)
+	}
+	if cfg.FallbackSetter != nil {
+		api.SetFallbackConfigSetter(cfg.FallbackSetter)
+	}
+	if cfg.TunnelManager != nil {
+		api.SetTunnelManager(cfg.TunnelManager)
+	}
 
 	return &Server{
 		cfg:          cfg,
@@ -140,6 +169,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. API Endpoints
 	if path == "/api/status" {
 		s.api.HandleStatus(w, r)
+		return
+	}
+	if path == "/api/config" {
+		s.api.HandleConfig(w, r)
+		return
+	}
+	if path == "/api/models" {
+		s.api.HandleModels(w, r)
+		return
+	}
+	if path == "/api/tunnel/status" {
+		s.api.HandleTunnelStatus(w, r)
+		return
+	}
+	if path == "/api/tunnel/start" {
+		s.api.HandleTunnelStart(w, r)
+		return
+	}
+	if path == "/api/tunnel/stop" {
+		s.api.HandleTunnelStop(w, r)
 		return
 	}
 	if strings.HasPrefix(path, "/api/accounts") {

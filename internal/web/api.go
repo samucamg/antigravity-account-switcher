@@ -5,25 +5,62 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
+	_ "time/tzdata"
 
+	"github.com/samucamg/antigravity-account-switcher/internal/config"
 	"github.com/samucamg/antigravity-account-switcher/internal/domain"
 	"github.com/samucamg/antigravity-account-switcher/internal/oauth"
+	"github.com/samucamg/antigravity-account-switcher/internal/quota"
+	"github.com/samucamg/antigravity-account-switcher/internal/tunnel"
 )
+
+// FallbackConfigSetter defines an interface for dynamically updating model fallback settings at runtime.
+type FallbackConfigSetter interface {
+	SetFallbackConfig(primary, secondary string, enabled bool)
+}
 
 // APIHandler implements the REST endpoints and SSE real-time streaming for the switcher.
 type APIHandler struct {
-	accountRepo    domain.AccountRepository
-	quotaRepo      domain.QuotaRepository
-	metricsService domain.MetricsService
-	broadcaster    domain.EventBroadcaster
-	eventRepo      domain.EventRepository
-	oauthEngine    oauth.OAuthEngine
-	poller         QuotaPoller
-	startTime      time.Time
-	version        string
+	accountRepo          domain.AccountRepository
+	quotaRepo            domain.QuotaRepository
+	metricsService       domain.MetricsService
+	broadcaster          domain.EventBroadcaster
+	eventRepo            domain.EventRepository
+	oauthEngine          oauth.OAuthEngine
+	poller               QuotaPoller
+	startTime            time.Time
+	version              string
+	cfgMu                sync.RWMutex
+	appConfig            *config.Config
+	fallbackConfigSetter FallbackConfigSetter
+	tunnelManager        *tunnel.Manager
+}
+
+// SetConfig sets the configuration pointer for APIHandler.
+func (a *APIHandler) SetConfig(c *config.Config) {
+	a.cfgMu.Lock()
+	defer a.cfgMu.Unlock()
+	a.appConfig = c
+}
+
+// SetFallbackConfigSetter sets the dynamic fallback setter for live proxy updates.
+func (a *APIHandler) SetFallbackConfigSetter(s FallbackConfigSetter) {
+	a.cfgMu.Lock()
+	defer a.cfgMu.Unlock()
+	a.fallbackConfigSetter = s
+}
+
+// SetTunnelManager sets the cloudflare tunnel manager.
+func (a *APIHandler) SetTunnelManager(t *tunnel.Manager) {
+	a.cfgMu.Lock()
+	defer a.cfgMu.Unlock()
+	a.tunnelManager = t
 }
 
 // QuotaPoller defines interface for triggering quota polling passes.
@@ -356,6 +393,9 @@ func (a *APIHandler) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 
 	accountID := r.URL.Query().Get("account_id")
 	periodParam := r.URL.Query().Get("period")
+	tzParam := r.URL.Query().Get("tz")
+	tzOffsetParam := r.URL.Query().Get("tz_offset")
+	loc := parseLocation(tzParam, tzOffsetParam)
 
 	if accountID != "" {
 		norm := domain.PeriodLifetime
@@ -371,13 +411,33 @@ func (a *APIHandler) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := a.metricsService.GetDashboardPayload(ctx, 14)
+	payload, err := a.metricsService.GetDashboardPayloadWithLocation(ctx, 14, loc)
 	if err != nil {
 		writeErrorJSON(w, http.StatusInternalServerError, "failed to compute metrics dashboard payload", err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, payload)
+}
+
+// parseLocation resolves a *time.Location from either an IANA timezone name or a numeric minute offset.
+func parseLocation(tzParam, tzOffsetParam string) *time.Location {
+	if tzParam != "" {
+		if loc, err := time.LoadLocation(tzParam); err == nil {
+			return loc
+		}
+	}
+	if tzOffsetParam != "" {
+		// tz_offset in minutes: -new Date().getTimezoneOffset()
+		// e.g. -180 for UTC-3, +540 for UTC+9
+		if offsetMinutes, err := strconv.Atoi(tzOffsetParam); err == nil {
+			hours := offsetMinutes / 60
+			mins := int(math.Abs(float64(offsetMinutes % 60)))
+			name := fmt.Sprintf("UTC%+03d:%02d", hours, mins)
+			return time.FixedZone(name, offsetMinutes*60)
+		}
+	}
+	return time.UTC
 }
 
 // HandleEvents serves GET /api/events as a real-time SSE stream.
@@ -505,4 +565,321 @@ func writeErrorJSON(w http.ResponseWriter, statusCode int, message string, err e
 			"detail":  detail,
 		},
 	})
+}
+
+// ConfigResponse represents the response payload for GET /api/config.
+type ConfigResponse struct {
+	ModelPrimary             string `json:"model_primary"`
+	ModelSecondary           string `json:"model_secondary"`
+	FallbackSecondaryEnabled bool   `json:"fallback_secondary_enabled"`
+	CloudflareTunnelToken    string `json:"cloudflare_tunnel_token,omitempty"`
+	RemoteAuthEnabled        bool   `json:"remote_auth_enabled"`
+}
+
+// ConfigUpdateRequest represents the payload for POST /api/config.
+type ConfigUpdateRequest struct {
+	ModelPrimary             *string `json:"model_primary,omitempty"`
+	ModelSecondary           *string `json:"model_secondary,omitempty"`
+	FallbackSecondaryEnabled *bool   `json:"fallback_secondary_enabled,omitempty"`
+	CloudflareTunnelToken    *string `json:"cloudflare_tunnel_token,omitempty"`
+	RemoteAuthToken          *string `json:"remote_auth_token,omitempty"`
+}
+
+// HandleConfig serves GET and POST /api/config.
+func (a *APIHandler) HandleConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		a.getConfig(w, r)
+	case http.MethodPost, http.MethodPut:
+		a.updateConfig(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *APIHandler) getConfig(w http.ResponseWriter, _ *http.Request) {
+	a.cfgMu.RLock()
+	var primary, secondary, tunnelToken string
+	var enabled, remoteAuth bool
+	if a.appConfig != nil {
+		primary = a.appConfig.ModelPrimary
+		secondary = a.appConfig.ModelSecondary
+		enabled = a.appConfig.FallbackSecondaryEnabled
+		tunnelToken = a.appConfig.CloudflareTunnelToken
+		remoteAuth = a.appConfig.RemoteAuthToken != ""
+	}
+	a.cfgMu.RUnlock()
+
+	writeJSON(w, http.StatusOK, ConfigResponse{
+		ModelPrimary:             primary,
+		ModelSecondary:           secondary,
+		FallbackSecondaryEnabled: enabled,
+		CloudflareTunnelToken:    tunnelToken,
+		RemoteAuthEnabled:        remoteAuth,
+	})
+}
+
+func (a *APIHandler) updateConfig(w http.ResponseWriter, r *http.Request) {
+	var req ConfigUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, "invalid JSON payload", err)
+		return
+	}
+
+	a.cfgMu.Lock()
+	if a.appConfig == nil {
+		a.appConfig = config.DefaultConfig()
+	}
+	currentCfg := a.appConfig
+
+	if req.ModelPrimary != nil {
+		if trimmed := strings.TrimSpace(*req.ModelPrimary); trimmed != "" {
+			currentCfg.ModelPrimary = trimmed
+		}
+	}
+	if req.ModelSecondary != nil {
+		if trimmed := strings.TrimSpace(*req.ModelSecondary); trimmed != "" {
+			currentCfg.ModelSecondary = trimmed
+		}
+	}
+	if req.FallbackSecondaryEnabled != nil {
+		currentCfg.FallbackSecondaryEnabled = *req.FallbackSecondaryEnabled
+	}
+	if req.CloudflareTunnelToken != nil {
+		currentCfg.CloudflareTunnelToken = strings.TrimSpace(*req.CloudflareTunnelToken)
+	}
+	if req.RemoteAuthToken != nil {
+		currentCfg.RemoteAuthToken = strings.TrimSpace(*req.RemoteAuthToken)
+	}
+
+	_ = config.Save(currentCfg)
+
+	if a.fallbackConfigSetter != nil {
+		a.fallbackConfigSetter.SetFallbackConfig(
+			currentCfg.ModelPrimary,
+			currentCfg.ModelSecondary,
+			currentCfg.FallbackSecondaryEnabled,
+		)
+	}
+
+	resp := ConfigResponse{
+		ModelPrimary:             currentCfg.ModelPrimary,
+		ModelSecondary:           currentCfg.ModelSecondary,
+		FallbackSecondaryEnabled: currentCfg.FallbackSecondaryEnabled,
+		CloudflareTunnelToken:    currentCfg.CloudflareTunnelToken,
+		RemoteAuthEnabled:        currentCfg.RemoteAuthToken != "",
+	}
+	broadcaster := a.broadcaster
+	a.cfgMu.Unlock()
+
+	if broadcaster != nil {
+		broadcaster.Broadcast(&domain.ProxyEvent{
+			Type:    domain.EventTypeAccountSwitched,
+			Message: fmt.Sprintf("Model fallback updated: Primary=%s, Secondary=%s, Enabled=%t", resp.ModelPrimary, resp.ModelSecondary, resp.FallbackSecondaryEnabled),
+			Details: map[string]any{
+				"model_primary":              resp.ModelPrimary,
+				"model_secondary":            resp.ModelSecondary,
+				"fallback_secondary_enabled": resp.FallbackSecondaryEnabled,
+			},
+			Timestamp: time.Now().UTC(),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ModelsResponse models the JSON payload for GET /api/models.
+type ModelsResponse struct {
+	Models []*domain.ModelInfo `json:"models"`
+	Source string              `json:"source"`
+}
+
+// HandleModels serves GET /api/models.
+func (a *APIHandler) HandleModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+	models, source := a.discoverModels(ctx)
+
+	writeJSON(w, http.StatusOK, ModelsResponse{
+		Models: models,
+		Source: source,
+	})
+}
+
+func (a *APIHandler) discoverModels(ctx context.Context) ([]*domain.ModelInfo, string) {
+	// 1. Try querying running language_server on localhost
+	if lsModels, err := quota.QueryAvailableModels(ctx); err == nil && len(lsModels) > 0 {
+		return a.ensureConfiguredModelsPresent(lsModels), "language_server"
+	}
+
+	// 2. Try querying Cloud Code PA directly if active account token exists
+	if a.accountRepo != nil {
+		if activeAcc, err := a.accountRepo.GetActive(ctx); err == nil && activeAcc != nil && activeAcc.AccessToken != "" {
+			if ccModels, err := quota.FetchAvailableModelsFromCloudCode(ctx, activeAcc.AccessToken); err == nil && len(ccModels) > 0 {
+				return a.ensureConfiguredModelsPresent(ccModels), "cloud_code_pa"
+			}
+		}
+	}
+
+	// 3. Fall back to standard curated built-in model matrix
+	return a.ensureConfiguredModelsPresent(standardFallbackModels()), "standard_catalog"
+}
+
+func (a *APIHandler) ensureConfiguredModelsPresent(discovered []*domain.ModelInfo) []*domain.ModelInfo {
+	a.cfgMu.RLock()
+	var primary, secondary string
+	if a.appConfig != nil {
+		primary = a.appConfig.ModelPrimary
+		secondary = a.appConfig.ModelSecondary
+	}
+	a.cfgMu.RUnlock()
+
+	res := make([]*domain.ModelInfo, len(discovered))
+	copy(res, discovered)
+
+	hasPrimary := false
+	hasSecondary := false
+	for _, m := range res {
+		if m.ID == primary {
+			hasPrimary = true
+		}
+		if m.ID == secondary {
+			hasSecondary = true
+		}
+	}
+
+	if primary != "" && !hasPrimary {
+		res = append(res, &domain.ModelInfo{
+			ID:          primary,
+			DisplayName: primary,
+			Category:    "gemini",
+			Recommended: true,
+		})
+	}
+	if secondary != "" && !hasSecondary {
+		res = append(res, &domain.ModelInfo{
+			ID:          secondary,
+			DisplayName: secondary,
+			Category:    "claude_gpt",
+			Recommended: false,
+		})
+	}
+	return res
+}
+
+func standardFallbackModels() []*domain.ModelInfo {
+	return []*domain.ModelInfo{
+		{ID: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro", Category: "gemini", Recommended: true},
+		{ID: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash", Category: "gemini", Recommended: true},
+		{ID: "gemini-2.0-pro-exp", DisplayName: "Gemini 2.0 Pro Exp", Category: "gemini", Recommended: false},
+		{ID: "gemini-2.0-flash", DisplayName: "Gemini 2.0 Flash", Category: "gemini", Recommended: false},
+		{ID: "claude-3-7-sonnet", DisplayName: "Claude 3.7 Sonnet", Category: "claude_gpt", Recommended: true},
+		{ID: "claude-3-5-sonnet", DisplayName: "Claude 3.5 Sonnet", Category: "claude_gpt", Recommended: true},
+		{ID: "claude-3-5-haiku", DisplayName: "Claude 3.5 Haiku", Category: "claude_gpt", Recommended: false},
+	}
+}
+
+// HandleTunnelStatus handles GET /api/tunnel/status
+func (a *APIHandler) HandleTunnelStatus(w http.ResponseWriter, r *http.Request) {
+	if a.tunnelManager == nil {
+		writeJSON(w, http.StatusOK, tunnel.Status{Active: false, Mode: tunnel.ModeNone})
+		return
+	}
+	writeJSON(w, http.StatusOK, a.tunnelManager.GetStatus())
+}
+
+// HandleTunnelStart handles POST /api/tunnel/start
+func (a *APIHandler) HandleTunnelStart(w http.ResponseWriter, r *http.Request) {
+	if a.tunnelManager == nil {
+		writeErrorJSON(w, http.StatusInternalServerError, "tunnel manager not initialized", nil)
+		return
+	}
+	var req struct {
+		Type  string `json:"type"`
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	port := 8080
+	a.cfgMu.RLock()
+	if a.appConfig != nil && a.appConfig.Port > 0 {
+		port = a.appConfig.Port
+	}
+	a.cfgMu.RUnlock()
+
+	var err error
+	if req.Type == "zero_trust" {
+		token := req.Token
+		if token == "" {
+			a.cfgMu.RLock()
+			if a.appConfig != nil {
+				token = a.appConfig.CloudflareTunnelToken
+			}
+			a.cfgMu.RUnlock()
+		}
+		if token == "" {
+			writeErrorJSON(w, http.StatusBadRequest, "zero trust tunnel token is required", nil)
+			return
+		}
+		err = a.tunnelManager.StartTokenTunnel(token)
+	} else {
+		err = a.tunnelManager.StartQuickTunnel(port)
+	}
+
+	if err != nil {
+		writeErrorJSON(w, http.StatusInternalServerError, "failed to start tunnel", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, a.tunnelManager.GetStatus())
+}
+
+// HandleTunnelStop handles POST /api/tunnel/stop
+func (a *APIHandler) HandleTunnelStop(w http.ResponseWriter, r *http.Request) {
+	if a.tunnelManager == nil {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "stopped"})
+		return
+	}
+	if err := a.tunnelManager.Stop(); err != nil {
+		writeErrorJSON(w, http.StatusInternalServerError, "failed to stop tunnel", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.tunnelManager.GetStatus())
+}
+
+// CheckAuthorized checks if incoming remote request is authenticated.
+func (a *APIHandler) CheckAuthorized(r *http.Request) bool {
+	a.cfgMu.RLock()
+	expectedToken := ""
+	if a.appConfig != nil {
+		expectedToken = a.appConfig.RemoteAuthToken
+	}
+	a.cfgMu.RUnlock()
+
+	if expectedToken == "" {
+		return true // No password/token set, free access
+	}
+
+	// 1. Check Bearer token
+	auth := r.Header.Get("Authorization")
+	if strings.HasPrefix(auth, "Bearer ") {
+		token := strings.TrimPrefix(auth, "Bearer ")
+		if token == expectedToken {
+			return true
+		}
+	}
+
+	// 2. Check query parameter ?token=...
+	if r.URL.Query().Get("token") == expectedToken {
+		return true
+	}
+
+	return false
 }

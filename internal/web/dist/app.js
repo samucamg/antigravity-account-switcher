@@ -73,6 +73,24 @@
     return isoDateStr;
   }
 
+  function getLocalDateStr(d = new Date()) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function getClientTimezoneInfo() {
+    let tz = '';
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    } catch (_) {
+      tz = '';
+    }
+    const offsetMinutes = -new Date().getTimezoneOffset();
+    return { tz, offsetMinutes };
+  }
+
   // Calculate live countdown timer from reset time string
   function getRemainingSeconds(resetTimeStr) {
     if (!resetTimeStr) return 0;
@@ -531,7 +549,12 @@
 
   async function fetchMetrics() {
     try {
-      const res = await fetch(`/api/metrics?period=${encodeURIComponent(currentPeriod)}`);
+      const tzInfo = getClientTimezoneInfo();
+      const res = await fetch(
+        `/api/metrics?period=${encodeURIComponent(currentPeriod)}` +
+        `&tz=${encodeURIComponent(tzInfo.tz)}` +
+        `&tz_offset=${encodeURIComponent(tzInfo.offsetMinutes)}`
+      );
       if (!res.ok) return;
       const data = await res.json();
 
@@ -629,7 +652,7 @@
     if (gridMaxLabel) gridMaxLabel.textContent = formatCompactNumber(maxTokens);
     if (gridMidLabel) gridMidLabel.textContent = formatCompactNumber(Math.round(maxTokens / 2));
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getLocalDateStr();
 
     // Render columns
     timeline.forEach((item, index) => {
@@ -804,7 +827,9 @@
 
   function resetInspector() {
     if (inspectorDate && inspectorData) {
-      inspectorDate.textContent = '14-Day Daily Usage Trend';
+      const tzInfo = getClientTimezoneInfo();
+      const tzLabel = tzInfo.tz ? ` • ${tzInfo.tz}` : '';
+      inspectorDate.textContent = `14-Day Daily Usage Trend${tzLabel}`;
       inspectorData.innerHTML = `
         <span class="text-xs text-muted">Hover or use arrow keys to inspect daily breakdown</span>
       `;
@@ -1171,5 +1196,277 @@
       fetchAccounts();
       fetchMetrics();
     }, 30000);
+
+    // Initial load for config, models, and tunnels
+    fetchModels().then(() => fetchConfig());
+    fetchTunnelStatus();
+    setInterval(fetchTunnelStatus, 5000);
+
+    // Fallback toggle event
+    const fallbackToggle = document.getElementById('fallback-enabled-toggle');
+    const fallbackLabel = document.getElementById('fallback-toggle-status');
+    if (fallbackToggle && fallbackLabel) {
+      fallbackToggle.addEventListener('change', () => {
+        fallbackLabel.textContent = fallbackToggle.checked ? 'Ativado' : 'Desativado';
+      });
+    }
+
+    // Save fallback config button
+    const btnSaveCfg = document.getElementById('btn-save-config');
+    if (btnSaveCfg) btnSaveCfg.addEventListener('click', saveConfig);
+
+    // Refresh models button
+    const btnRefreshModels = document.getElementById('btn-refresh-models');
+    if (btnRefreshModels) btnRefreshModels.addEventListener('click', fetchModels);
+
+    // Quick tunnel toggle button
+    const btnQuickTunnel = document.getElementById('btn-toggle-quick-tunnel');
+    if (btnQuickTunnel) btnQuickTunnel.addEventListener('click', toggleQuickTunnel);
+
+    // Token tunnel toggle button
+    const btnTokenTunnel = document.getElementById('btn-toggle-token-tunnel');
+    if (btnTokenTunnel) btnTokenTunnel.addEventListener('click', toggleTokenTunnel);
+
+    // Copy tunnel URL button
+    const btnCopyTunnel = document.getElementById('btn-copy-tunnel-url');
+    if (btnCopyTunnel) {
+      btnCopyTunnel.addEventListener('click', () => {
+        const publicUrl = document.getElementById('tunnel-public-url');
+        if (publicUrl && publicUrl.textContent) {
+          navigator.clipboard.writeText(publicUrl.textContent);
+          btnCopyTunnel.style.color = 'var(--color-success)';
+          setTimeout(() => { btnCopyTunnel.style.color = ''; }, 2000);
+        }
+      });
+    }
   });
+
+  // =========================================================================
+  // Section 2.5 & 2.6 Handlers
+  // =========================================================================
+  let cachedModels = [];
+
+  async function fetchConfig() {
+    try {
+      const res = await fetch('/api/config');
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const toggle = document.getElementById('fallback-enabled-toggle');
+      const toggleLabel = document.getElementById('fallback-toggle-status');
+      if (toggle && toggleLabel) {
+        toggle.checked = !!data.fallback_secondary_enabled;
+        toggle.setAttribute('aria-checked', toggle.checked ? 'true' : 'false');
+        toggleLabel.textContent = toggle.checked ? 'Ativado' : 'Desativado';
+      }
+
+      if (data.model_primary) {
+        const selPri = document.getElementById('select-model-primary');
+        if (selPri) selPri.value = data.model_primary;
+      }
+      if (data.model_secondary) {
+        const selSec = document.getElementById('select-model-secondary');
+        if (selSec) selSec.value = data.model_secondary;
+      }
+      if (data.cloudflare_tunnel_token) {
+        const tokInput = document.getElementById('input-tunnel-token');
+        if (tokInput && !tokInput.value) tokInput.value = data.cloudflare_tunnel_token;
+      }
+    } catch (_) {}
+  }
+
+  async function fetchModels() {
+    const badge = document.getElementById('models-source-badge');
+    const selPri = document.getElementById('select-model-primary');
+    const selSec = document.getElementById('select-model-secondary');
+
+    try {
+      if (badge) badge.textContent = 'Buscando...';
+      const res = await fetch('/api/models');
+      if (!res.ok) return;
+      const data = await res.json();
+      cachedModels = data.models || [];
+
+      const currentPri = selPri ? selPri.value : '';
+      const currentSec = selSec ? selSec.value : '';
+
+      if (selPri && selSec && cachedModels.length > 0) {
+        selPri.innerHTML = '';
+        selSec.innerHTML = '';
+
+        cachedModels.forEach(m => {
+          const optPri = document.createElement('option');
+          optPri.value = m.id;
+          optPri.textContent = `${m.display_name} (${m.category})`;
+          selPri.appendChild(optPri);
+
+          const optSec = document.createElement('option');
+          optSec.value = m.id;
+          optSec.textContent = `${m.display_name} (${m.category})`;
+          selSec.appendChild(optSec);
+        });
+
+        if (currentPri) selPri.value = currentPri;
+        if (currentSec) selSec.value = currentSec;
+      }
+
+      if (badge) {
+        badge.textContent = `${cachedModels.length} modelos detectados`;
+      }
+    } catch (_) {
+      if (badge) badge.textContent = 'Erro ao buscar';
+    }
+  }
+
+  async function saveConfig() {
+    const toggle = document.getElementById('fallback-enabled-toggle');
+    const selPri = document.getElementById('select-model-primary');
+    const selSec = document.getElementById('select-model-secondary');
+    const statusMsg = document.getElementById('config-status-msg');
+    const tokInput = document.getElementById('input-tunnel-token');
+
+    if (!selPri || !selSec) return;
+
+    const payload = {
+      fallback_secondary_enabled: toggle ? toggle.checked : false,
+      model_primary: selPri.value,
+      model_secondary: selSec.value,
+      cloudflare_tunnel_token: tokInput ? tokInput.value : '',
+    };
+
+    try {
+      if (statusMsg) {
+        statusMsg.style.color = 'var(--text-secondary)';
+        statusMsg.textContent = 'Salvando...';
+      }
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (statusMsg) {
+          statusMsg.style.color = 'var(--color-danger)';
+          statusMsg.textContent = err.error?.message || 'Erro ao salvar';
+        }
+        return;
+      }
+      if (statusMsg) {
+        statusMsg.style.color = 'var(--color-success)';
+        statusMsg.textContent = 'Configurações salvas!';
+        setTimeout(() => { statusMsg.textContent = ''; }, 3000);
+      }
+    } catch (_) {
+      if (statusMsg) {
+        statusMsg.style.color = 'var(--color-danger)';
+        statusMsg.textContent = 'Falha na conexão';
+      }
+    }
+  }
+
+  async function fetchTunnelStatus() {
+    try {
+      const res = await fetch('/api/tunnel/status');
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const badge = document.getElementById('tunnel-status-badge');
+      const urlContainer = document.getElementById('tunnel-url-container');
+      const publicUrl = document.getElementById('tunnel-public-url');
+      const btnQuick = document.getElementById('btn-toggle-quick-tunnel');
+      const btnToken = document.getElementById('btn-toggle-token-tunnel');
+
+      if (data.active) {
+        if (badge) {
+          badge.className = 'badge badge-success mono';
+          badge.textContent = data.mode === 'quick' ? 'Quick Tunnel Ativo' : 'Zero Trust Ativo';
+        }
+        if (urlContainer && publicUrl && data.url) {
+          urlContainer.style.display = 'flex';
+          publicUrl.textContent = data.url;
+          publicUrl.href = data.url.startsWith('http') ? data.url : '#';
+        }
+        if (btnQuick) {
+          if (data.mode === 'quick') {
+            btnQuick.textContent = 'Parar Quick Tunnel';
+            btnQuick.className = 'btn btn-danger';
+          } else {
+            btnQuick.disabled = true;
+          }
+        }
+        if (btnToken) {
+          if (data.mode === 'zero_trust') {
+            btnToken.textContent = 'Desconectar Token';
+            btnToken.className = 'btn btn-danger';
+          } else {
+            btnToken.disabled = true;
+          }
+        }
+      } else {
+        if (badge) {
+          badge.className = 'badge badge-neutral mono';
+          badge.textContent = 'Inativo';
+        }
+        if (urlContainer) urlContainer.style.display = 'none';
+        if (btnQuick) {
+          btnQuick.textContent = 'Iniciar Quick Tunnel';
+          btnQuick.className = 'btn btn-primary';
+          btnQuick.disabled = false;
+        }
+        if (btnToken) {
+          btnToken.textContent = 'Conectar com Token';
+          btnToken.className = 'btn btn-secondary';
+          btnToken.disabled = false;
+        }
+      }
+    } catch (_) {}
+  }
+
+  async function toggleQuickTunnel() {
+    const btn = document.getElementById('btn-toggle-quick-tunnel');
+    if (!btn) return;
+
+    const isStopping = btn.textContent.includes('Parar');
+    btn.disabled = true;
+    btn.textContent = isStopping ? 'Parando...' : 'Iniciando...';
+
+    try {
+      if (isStopping) {
+        await fetch('/api/tunnel/stop', { method: 'POST' });
+      } else {
+        await fetch('/api/tunnel/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'quick' })
+        });
+      }
+    } catch (_) {}
+
+    await fetchTunnelStatus();
+  }
+
+  async function toggleTokenTunnel() {
+    const btn = document.getElementById('btn-toggle-token-tunnel');
+    const input = document.getElementById('input-tunnel-token');
+    if (!btn) return;
+
+    const isStopping = btn.textContent.includes('Desconectar');
+    btn.disabled = true;
+    btn.textContent = isStopping ? 'Desconectando...' : 'Conectando...';
+
+    try {
+      if (isStopping) {
+        await fetch('/api/tunnel/stop', { method: 'POST' });
+      } else {
+        await fetch('/api/tunnel/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'zero_trust', token: input ? input.value : '' })
+        });
+      }
+    } catch (_) {}
+
+    await fetchTunnelStatus();
+  }
 })();

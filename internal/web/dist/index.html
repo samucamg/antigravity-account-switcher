@@ -117,6 +117,145 @@
       </div>
     </section>
 
+    <!-- Section 2.5: Model Fallback & Routing Strategy -->
+    <section class="panel" aria-labelledby="fallback-section-title">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <h2 id="fallback-section-title" class="panel-title">
+            Model Fallback & Routing
+            <span id="models-source-badge" class="badge badge-info mono">Carregando modelos...</span>
+          </h2>
+          <p class="panel-description">Fallback dinâmico multi-tier. Reenvia chamadas para o modelo secundário na mesma conta antes de rotacionar contas ao esgotar cotas.</p>
+        </div>
+        <div class="header-actions">
+          <button id="btn-refresh-models" class="btn btn-secondary btn-icon" title="Buscar modelos instalados" aria-label="Atualizar Modelos">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" id="refresh-models-icon" width="14" height="14">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span class="btn-text-desktop">Atualizar Modelos</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="fallback-config-card">
+        <!-- Toggle secondary fallback -->
+        <div class="config-row config-toggle-row">
+          <div class="config-label-group">
+            <label for="fallback-enabled-toggle" class="config-label">Fallback Intra-Conta Secundário</label>
+            <p class="config-subtext">Quando a cota do modelo primário esgotar (429/403), tenta o modelo secundário na MESMA conta antes de trocar de conta.</p>
+          </div>
+          <div class="switch-control">
+            <input type="checkbox" id="fallback-enabled-toggle" class="toggle-checkbox" role="switch" aria-checked="false">
+            <label for="fallback-enabled-toggle" class="toggle-track" aria-hidden="true"></label>
+            <span id="fallback-toggle-status" class="toggle-label-text">Desativado</span>
+          </div>
+        </div>
+
+        <!-- Model Selectors Grid -->
+        <div class="config-selectors-grid">
+          <!-- Primary Model -->
+          <div class="config-field">
+            <label for="select-model-primary" class="field-label">
+              Modelo Primário
+              <span class="field-badge badge-primary">Preferencial</span>
+            </label>
+            <div class="select-wrapper">
+              <select id="select-model-primary" class="form-select">
+                <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+              </select>
+            </div>
+            <p class="field-hint">Modelo padrão prioritário para as requisições.</p>
+          </div>
+
+          <!-- Secondary Model -->
+          <div class="config-field">
+            <label for="select-model-secondary" class="field-label">
+              Modelo Secundário (Fallback)
+              <span class="field-badge badge-neutral">Contingência</span>
+            </label>
+            <div class="select-wrapper">
+              <select id="select-model-secondary" class="form-select">
+                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              </select>
+            </div>
+            <p class="field-hint">Usado como contingência na mesma conta antes de rotacionar.</p>
+          </div>
+        </div>
+
+        <!-- Action Bar -->
+        <div class="config-actions-bar">
+          <div class="config-status-msg" id="config-status-msg" aria-live="polite"></div>
+          <button id="btn-save-config" class="btn btn-primary" title="Salvar Configurações de Fallback">
+            Salvar Configurações
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2.6: Túneis & Acesso Remoto -->
+    <section class="panel" aria-labelledby="tunnels-section-title">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <h2 id="tunnels-section-title" class="panel-title">
+            Túneis & Acesso Remoto
+            <span id="tunnel-status-badge" class="badge badge-neutral mono">Inativo</span>
+          </h2>
+          <p class="panel-description">Exponha com segurança o proxy e o dashboard via Cloudflare (Quick Tunnel ou Zero Trust com domínio próprio).</p>
+        </div>
+      </div>
+
+      <div class="tunnel-grid">
+        <!-- Quick Tunnel Card -->
+        <div class="tunnel-card">
+          <div class="tunnel-card-header">
+            <div class="tunnel-brand">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+              </svg>
+              <span>Cloudflare Quick Tunnel</span>
+            </div>
+            <span id="quick-badge" class="badge badge-info">1-Clique</span>
+          </div>
+          <p class="config-subtext">Cria uma URL pública HTTPS temporária instantânea (trycloudflare.com) sem precisar de login ou configuração.</p>
+          
+          <div id="tunnel-url-container" class="tunnel-url-box" style="display: none;">
+            <a id="tunnel-public-url" href="#" target="_blank" rel="noopener noreferrer" class="tunnel-url-text">https://...</a>
+            <button id="btn-copy-tunnel-url" class="btn btn-secondary btn-icon" title="Copiar URL">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="tunnel-actions">
+            <button id="btn-toggle-quick-tunnel" class="btn btn-primary">Iniciar Quick Tunnel</button>
+          </div>
+        </div>
+
+        <!-- Zero Trust Card -->
+        <div class="tunnel-card">
+          <div class="tunnel-card-header">
+            <div class="tunnel-brand">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+              <span>Cloudflare Zero Trust (Domínio Fixo)</span>
+            </div>
+          </div>
+          <p class="config-subtext">Use um Token de túnel do seu painel Cloudflare Zero Trust para conectar a um domínio fixo.</p>
+          
+          <div class="config-field">
+            <input type="password" id="input-tunnel-token" class="form-input" placeholder="Cole o token do seu túnel Cloudflare aqui">
+          </div>
+
+          <div class="tunnel-actions">
+            <button id="btn-toggle-token-tunnel" class="btn btn-secondary">Conectar com Token</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Section 3: Token Consumption & 14-Day Timeline Visualizer -->
     <section class="panel" aria-labelledby="metrics-section-title">
       <div class="panel-header">

@@ -45,33 +45,37 @@ timeout /t 2 /nobreak >nul
 start "" "http://127.0.0.1:1831/"
 
 if not "%IDE_BIN%"=="" (
-    set "HTTP_PROXY=http://127.0.0.1:1831"
-    set "HTTPS_PROXY=http://127.0.0.1:1831"
-    set "http_proxy=http://127.0.0.1:1831"
-    set "https_proxy=http://127.0.0.1:1831"
-    set "NO_PROXY=localhost,127.0.0.1,::1"
-    set "no_proxy=localhost,127.0.0.1,::1"
-    set "CLOUD_CODE_URL=http://127.0.0.1:1831"
-    
-    start "" "%IDE_BIN%"
-    
-    echo.
-    echo ========================================================
-    echo IDE e Servidor Proxy iniciados com sucesso!
-    echo Mantenha esta janela aberta enquanto estiver programando.
-    echo Para encerrar o proxy, basta fechar esta janela preta.
-    echo ========================================================
-    pause
-    taskkill /F /IM antigravity-account-switcher.exe >nul 2>&1
+    goto LaunchIDE
 ) else (
-    echo.
-    echo ========================================================
-    echo Servidor Proxy iniciado com sucesso! (IDE nao encontrada)
-    echo Mantenha esta janela aberta para manter o proxy rodando.
-    echo Para encerrar o proxy, feche esta janela preta.
-    echo ========================================================
-    pause
-    taskkill /F /IM antigravity-account-switcher.exe >nul 2>&1
+    goto LaunchStandalone
 )
 
+:LaunchIDE
+set "HTTP_PROXY=http://127.0.0.1:1831"
+set "HTTPS_PROXY=http://127.0.0.1:1831"
+set "http_proxy=http://127.0.0.1:1831"
+set "https_proxy=http://127.0.0.1:1831"
+set "NO_PROXY=localhost,127.0.0.1,::1"
+set "no_proxy=localhost,127.0.0.1,::1"
+set "CLOUD_CODE_URL=http://127.0.0.1:1831"
+
+start "" "%IDE_BIN%"
+
+echo.
+echo ========================================================
+echo IDE e Servidor Proxy iniciados com sucesso!
+echo Mantenha esta janela aberta enquanto estiver programando.
+echo Para encerrar o proxy, basta fechar esta janela preta no X.
+echo ========================================================
+ping -t 127.0.0.1 >nul
+exit /b 0
+
+:LaunchStandalone
+echo.
+echo ========================================================
+echo Servidor Proxy iniciado com sucesso! (IDE nao encontrada)
+echo Mantenha esta janela aberta para manter o proxy rodando.
+echo Para encerrar o proxy, basta fechar esta janela preta no X.
+echo ========================================================
+ping -t 127.0.0.1 >nul
 exit /b 0

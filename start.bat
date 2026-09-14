@@ -52,13 +52,24 @@ if not "%IDE_BIN%"=="" (
     set "NO_PROXY=localhost,127.0.0.1,::1"
     set "no_proxy=localhost,127.0.0.1,::1"
     set "CLOUD_CODE_URL=http://127.0.0.1:1831"
-    echo IDE aberta. Feche a janela da IDE para encerrar o proxy.
-    "%IDE_BIN%"
     
-    echo IDE fechada. Encerrando o proxy...
+    start "" "%IDE_BIN%"
+    
+    echo.
+    echo ========================================================
+    echo IDE e Servidor Proxy iniciados com sucesso!
+    echo Mantenha esta janela aberta enquanto estiver programando.
+    echo Para encerrar o proxy, basta fechar esta janela preta.
+    echo ========================================================
+    pause
     taskkill /F /IM antigravity-account-switcher.exe >nul 2>&1
 ) else (
-    echo Pressione qualquer tecla nesta janela para encerrar o proxy...
+    echo.
+    echo ========================================================
+    echo Servidor Proxy iniciado com sucesso! (IDE nao encontrada)
+    echo Mantenha esta janela aberta para manter o proxy rodando.
+    echo Para encerrar o proxy, feche esta janela preta.
+    echo ========================================================
     pause
     taskkill /F /IM antigravity-account-switcher.exe >nul 2>&1
 )

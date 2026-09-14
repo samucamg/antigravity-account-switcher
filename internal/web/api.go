@@ -620,6 +620,7 @@ func (a *APIHandler) getConfig(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *APIHandler) updateConfig(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 65536)
 	var req ConfigUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErrorJSON(w, http.StatusBadRequest, "invalid JSON payload", err)
@@ -674,7 +675,7 @@ func (a *APIHandler) updateConfig(w http.ResponseWriter, r *http.Request) {
 
 	if broadcaster != nil {
 		broadcaster.Broadcast(&domain.ProxyEvent{
-			Type:    domain.EventTypeAccountSwitched,
+			Type:    domain.EventTypeModelFallback,
 			Message: fmt.Sprintf("Model fallback updated: Primary=%s, Secondary=%s, Enabled=%t", resp.ModelPrimary, resp.ModelSecondary, resp.FallbackSecondaryEnabled),
 			Details: map[string]any{
 				"model_primary":              resp.ModelPrimary,

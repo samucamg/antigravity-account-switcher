@@ -8,10 +8,21 @@
   let eventSource = null;
   let rawTimelineData = [];
   let rawAccountsData = [];
+  let rawModelsData = [];
+  let currentAppConfig = {
+    model_primary: 'gemini-2.5-pro',
+    model_secondary: 'gemini-2.5-flash',
+    fallback_secondary_enabled: false
+  };
   let allEvents = [];
   let currentLogFilter = 'all';
   let isUserScrolledUp = false;
   let selectedColumnIndex = -1;
+
+  // Privacy Mode State (Persistent in localStorage)
+  const PRIVACY_STORAGE_KEY = 'antigravity_privacy_mode';
+  let isPrivacyMode = localStorage.getItem(PRIVACY_STORAGE_KEY) === 'true';
+  const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
   // DOM Elements
   const logsContainer = document.getElementById('logs-container');
@@ -28,6 +39,17 @@
   const gridMaxLabel = document.getElementById('grid-max-label');
   const gridMidLabel = document.getElementById('grid-mid-label');
 
+  // Model Fallback DOM Elements
+  const fallbackToggle = document.getElementById('fallback-enabled-toggle');
+  const fallbackToggleStatus = document.getElementById('fallback-toggle-status');
+  const selectModelPrimary = document.getElementById('select-model-primary');
+  const selectModelSecondary = document.getElementById('select-model-secondary');
+  const btnSaveConfig = document.getElementById('btn-save-config');
+  const btnRefreshModels = document.getElementById('btn-refresh-models');
+  const refreshModelsIcon = document.getElementById('refresh-models-icon');
+  const modelsSourceBadge = document.getElementById('models-source-badge');
+  const configStatusMsg = document.getElementById('config-status-msg');
+
   // =========================================================================
   // Formatting & Utility Helpers
   // =========================================================================
@@ -40,6 +62,71 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function redactEmails(text) {
+    if (!text) return '';
+    return String(text).replace(EMAIL_REGEX, '[redacted@email.com]');
+  }
+
+  function formatLogMessage(text) {
+    if (!text) return '';
+    const escaped = escapeHtml(text);
+    return escaped.replace(EMAIL_REGEX, match => `<span class="blurred-email">${match}</span>`);
+  }
+
+  function updatePrivacyUI() {
+    const btn = document.getElementById('btn-privacy');
+    const textEl = document.getElementById('privacy-btn-text');
+    const iconPath = document.getElementById('privacy-icon-path');
+
+    if (isPrivacyMode) {
+      document.body.classList.add('privacy-mode');
+      if (btn) {
+        btn.classList.add('btn-privacy-active');
+        btn.setAttribute('aria-pressed', 'true');
+        btn.title = 'Privacy Mode Active (Press P to toggle)';
+      }
+      if (textEl) textEl.textContent = 'Privacy: ON';
+      if (iconPath) {
+        iconPath.setAttribute('d', 'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18');
+      }
+    } else {
+      document.body.classList.remove('privacy-mode');
+      if (btn) {
+        btn.classList.remove('btn-privacy-active');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.title = 'Toggle Privacy Mode (Press P)';
+      }
+      if (textEl) textEl.textContent = 'Privacy';
+      if (iconPath) {
+        iconPath.setAttribute('d', 'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z');
+      }
+    }
+
+    // Refresh active route email title tooltip
+    const activeEmailEl = document.getElementById('active-email');
+    if (activeEmailEl && activeEmailEl.getAttribute('data-real-email')) {
+      const realEmail = activeEmailEl.getAttribute('data-real-email');
+      activeEmailEl.title = isPrivacyMode ? '[Protected in Privacy Mode]' : `${realEmail} (Click to copy)`;
+    }
+
+    // Re-render accounts grid if accounts data loaded
+    if (rawAccountsData && rawAccountsData.length > 0) {
+      renderAccountsGrid();
+    }
+
+    // Reapply log filtering to refresh blurred spans
+    reapplyLogFilter();
+  }
+
+  function togglePrivacyMode() {
+    isPrivacyMode = !isPrivacyMode;
+    try {
+      localStorage.setItem(PRIVACY_STORAGE_KEY, isPrivacyMode ? 'true' : 'false');
+    } catch (_) {}
+    updatePrivacyUI();
+    showToast(isPrivacyMode ? 'Privacy Mode enabled (emails blurred for screenshots)' : 'Privacy Mode disabled', 'info', 2500);
   }
 
   function formatNumber(num) {
@@ -180,7 +267,7 @@
       // Version badge
       const versionEl = document.getElementById('switcher-version');
       if (versionEl && data.version) {
-        versionEl.textContent = `v${data.version}`;
+        versionEl.textContent = data.version.startsWith('v') ? data.version : `v${data.version}`;
       }
 
       // Active Account Route
@@ -192,13 +279,21 @@
       if (data.active_account) {
         const email = data.active_account.email;
         activeEmailEl.textContent = email;
-        activeEmailEl.title = `${email} (Click to copy)`;
-        activeEmailEl.style.cursor = 'pointer';
-        activeEmailEl.onclick = () => copyToClipboard(email, 'Account email');
+        activeEmailEl.setAttribute('data-real-email', email);
+        activeEmailEl.title = isPrivacyMode ? '[Protected in Privacy Mode]' : `${email} (Click to copy)`;
+        activeEmailEl.style.cursor = isPrivacyMode ? 'default' : 'pointer';
+        activeEmailEl.onclick = () => {
+          const toCopy = isPrivacyMode ? '[redacted@email.com]' : email;
+          copyToClipboard(toCopy, isPrivacyMode ? 'Redacted email' : 'Account email');
+        };
 
         if (copyActiveBtn) {
           copyActiveBtn.style.display = 'inline-flex';
-          copyActiveBtn.onclick = () => copyToClipboard(email, 'Account email');
+          copyActiveBtn.title = isPrivacyMode ? 'Copy redacted email' : 'Copy active email';
+          copyActiveBtn.onclick = () => {
+            const toCopy = isPrivacyMode ? '[redacted@email.com]' : email;
+            copyToClipboard(toCopy, isPrivacyMode ? 'Redacted email' : 'Account email');
+          };
         }
 
         let createdDateStr = 'recent';
@@ -214,6 +309,7 @@
         activeBadge.textContent = (data.active_account.status || 'ACTIVE').toUpperCase();
         activeBadge.className = isExhausted ? 'badge badge-danger' : 'badge badge-success';
       } else {
+        activeEmailEl.removeAttribute('data-real-email');
         activeEmailEl.textContent = 'No Active Google Account';
         activeEmailEl.title = 'No account selected';
         activeEmailEl.style.cursor = 'default';
@@ -430,15 +526,18 @@
     else if (isActive) statusBadgeClass = 'badge-success';
     else if (acc.status === 'error') statusBadgeClass = 'badge-danger';
 
+    const cardTitle = isPrivacyMode ? '[Protected in Privacy Mode]' : escapeHtml(acc.email);
+    const copyTitle = isPrivacyMode ? 'Copy redacted email' : 'Copy email address';
+
     card.innerHTML = `
       <div class="account-header">
         <div class="account-info">
-          <div class="account-email" title="${escapeHtml(acc.email)}">
+          <div class="account-email" title="${cardTitle}">
             ${escapeHtml(acc.email)}
           </div>
           <div class="account-id-row">
             <span class="account-id-chip">ID: ${escapeHtml(acc.id.slice(0, 8))}</span>
-            <button class="copy-btn btn-copy-email" data-email="${escapeHtml(acc.email)}" title="Copy email address" aria-label="Copy email">
+            <button class="copy-btn btn-copy-email" data-email="${escapeHtml(acc.email)}" title="${copyTitle}" aria-label="Copy email">
               <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
@@ -477,7 +576,8 @@
     if (copyBtn) {
       copyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        copyToClipboard(acc.email, 'Account email');
+        const toCopy = isPrivacyMode ? '[redacted@email.com]' : acc.email;
+        copyToClipboard(toCopy, isPrivacyMode ? 'Redacted email' : 'Account email');
       });
     }
 
@@ -504,7 +604,8 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
             </svg>
           `;
-          showToast(`Click the red checkmark to confirm removal of ${acc.email}`, 'info', 3500);
+          const displayEmail = isPrivacyMode ? '[redacted@email.com]' : acc.email;
+          showToast(`Click the red checkmark to confirm removal of ${displayEmail}`, 'info', 3500);
 
           confirmTimeout = setTimeout(() => {
             deleteBtn.classList.remove('btn-danger-confirm');
@@ -541,6 +642,254 @@
         }
       }
     });
+  }
+
+  // =========================================================================
+  // Model Fallback Configuration & Dynamic Discovery
+  // =========================================================================
+
+  async function fetchConfig() {
+    try {
+      const res = await fetch('/api/config');
+      if (!res.ok) return;
+      const data = await res.json();
+      currentAppConfig = data;
+
+      if (fallbackToggle) {
+        fallbackToggle.checked = Boolean(data.fallback_secondary_enabled);
+        updateToggleStatusText(Boolean(data.fallback_secondary_enabled));
+      }
+      if (selectModelPrimary && data.model_primary) {
+        selectModelPrimary.value = data.model_primary;
+      }
+      if (selectModelSecondary && data.model_secondary) {
+        selectModelSecondary.value = data.model_secondary;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch config:', err);
+    }
+  }
+
+  function updateToggleStatusText(isEnabled) {
+    if (!fallbackToggleStatus) return;
+    if (isEnabled) {
+      fallbackToggleStatus.textContent = 'Enabled';
+      fallbackToggleStatus.className = 'toggle-label-text is-enabled';
+    } else {
+      fallbackToggleStatus.textContent = 'Disabled';
+      fallbackToggleStatus.className = 'toggle-label-text';
+    }
+  }
+
+  async function fetchModels() {
+    if (refreshModelsIcon) {
+      refreshModelsIcon.style.transition = 'transform 0.5s ease-in-out';
+      refreshModelsIcon.style.transform = 'rotate(360deg)';
+    }
+
+    try {
+      const res = await fetch('/api/models');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      rawModelsData = Array.isArray(data.models) ? data.models : [];
+
+      if (modelsSourceBadge) {
+        if (data.source === 'language_server') {
+          modelsSourceBadge.textContent = 'Antigravity IDE (Live)';
+          modelsSourceBadge.className = 'badge badge-success mono';
+          modelsSourceBadge.title = 'Discovered dynamically from running language_server';
+        } else if (data.source === 'quota_buckets') {
+          modelsSourceBadge.textContent = 'Quota Buckets';
+          modelsSourceBadge.className = 'badge badge-info mono';
+        } else {
+          modelsSourceBadge.textContent = 'Standard Catalog';
+          modelsSourceBadge.className = 'badge badge-neutral mono';
+        }
+      }
+
+      populateModelSelects();
+    } catch (err) {
+      console.warn('Failed to fetch models:', err);
+      if (modelsSourceBadge) {
+        modelsSourceBadge.textContent = 'Catalog (Offline)';
+        modelsSourceBadge.className = 'badge badge-warning mono';
+      }
+    } finally {
+      setTimeout(() => {
+        if (refreshModelsIcon) {
+          refreshModelsIcon.style.transition = 'none';
+          refreshModelsIcon.style.transform = 'rotate(0deg)';
+        }
+      }, 500);
+    }
+  }
+
+  function getModelCategory(modelId) {
+    const found = rawModelsData.find(m => m.id === modelId);
+    if (found && found.category) return found.category;
+    const lower = (modelId || '').toLowerCase();
+    if (lower.includes('claude') || lower.includes('gpt') || lower.includes('sonnet') || lower.includes('opus') || lower.includes('haiku') || lower.includes('3p')) {
+      return 'claude_gpt';
+    }
+    return 'gemini';
+  }
+
+  function updateSecondaryOptions() {
+    if (!selectModelPrimary || !selectModelSecondary) return;
+    const primaryVal = selectModelPrimary.value;
+    const primaryCat = getModelCategory(primaryVal);
+    const prevSecondary = selectModelSecondary.value || currentAppConfig.model_secondary;
+
+    const allowedModels = rawModelsData.filter(m => {
+      const cat = m.category || getModelCategory(m.id);
+      return cat !== primaryCat;
+    });
+
+    let html = '';
+    const label = primaryCat === 'gemini' ? 'Claude & GPT (Standby Fallback)' : 'Google Gemini (Standby Fallback)';
+    html += `<optgroup label="${label}">`;
+    allowedModels.forEach(m => {
+      const isSelected = m.id === prevSecondary ? 'selected' : '';
+      const star = m.recommended ? ' ★' : '';
+      html += `<option value="${escapeHtml(m.id)}" ${isSelected}>${escapeHtml(m.display_name || m.id)}${star}</option>`;
+    });
+    html += '</optgroup>';
+
+    selectModelSecondary.innerHTML = html;
+
+    // Validate if previously selected model is still in the new option list
+    const stillValid = Array.from(selectModelSecondary.options).some(opt => opt.value === prevSecondary);
+    if (!stillValid && selectModelSecondary.options.length > 0) {
+      selectModelSecondary.selectedIndex = 0;
+    }
+  }
+
+  function populateModelSelects() {
+    if (!selectModelPrimary || !selectModelSecondary) return;
+
+    const currentPrimary = currentAppConfig.model_primary || selectModelPrimary.value;
+    const currentSecondary = currentAppConfig.model_secondary || selectModelSecondary.value;
+
+    const geminiModels = [];
+    const claudeGptModels = [];
+    const otherModels = [];
+
+    rawModelsData.forEach(m => {
+      if (m.category === 'gemini') {
+        geminiModels.push(m);
+      } else if (m.category === 'claude_gpt') {
+        claudeGptModels.push(m);
+      } else {
+        otherModels.push(m);
+      }
+    });
+
+    function buildOptionsHtml(selectedVal) {
+      let html = '';
+
+      if (geminiModels.length > 0) {
+        html += '<optgroup label="Google Gemini">';
+        geminiModels.forEach(m => {
+          const isSelected = m.id === selectedVal ? 'selected' : '';
+          const star = m.recommended ? ' ★' : '';
+          html += `<option value="${escapeHtml(m.id)}" ${isSelected}>${escapeHtml(m.display_name || m.id)}${star}</option>`;
+        });
+        html += '</optgroup>';
+      }
+
+      if (claudeGptModels.length > 0) {
+        html += '<optgroup label="Claude & GPT (3P)">';
+        claudeGptModels.forEach(m => {
+          const isSelected = m.id === selectedVal ? 'selected' : '';
+          const star = m.recommended ? ' ★' : '';
+          html += `<option value="${escapeHtml(m.id)}" ${isSelected}>${escapeHtml(m.display_name || m.id)}${star}</option>`;
+        });
+        html += '</optgroup>';
+      }
+
+      if (otherModels.length > 0) {
+        html += '<optgroup label="Other Models">';
+        otherModels.forEach(m => {
+          const isSelected = m.id === selectedVal ? 'selected' : '';
+          html += `<option value="${escapeHtml(m.id)}" ${isSelected}>${escapeHtml(m.display_name || m.id)}</option>`;
+        });
+        html += '</optgroup>';
+      }
+
+      return html;
+    }
+
+    selectModelPrimary.innerHTML = buildOptionsHtml(currentPrimary);
+
+    // If current selection wasn't in list, add explicit option
+    if (currentPrimary && !selectModelPrimary.value) {
+      const opt = new Option(currentPrimary, currentPrimary, true, true);
+      selectModelPrimary.add(opt);
+    }
+
+    // Populate secondary options strictly scoped to cross-vendor models
+    updateSecondaryOptions();
+
+    if (currentSecondary && !selectModelSecondary.value) {
+      const opt = new Option(currentSecondary, currentSecondary, true, true);
+      selectModelSecondary.add(opt);
+    }
+  }
+
+  async function handleSaveConfig() {
+    if (!btnSaveConfig) return;
+
+    const primaryVal = selectModelPrimary ? selectModelPrimary.value : currentAppConfig.model_primary;
+    const secondaryVal = selectModelSecondary ? selectModelSecondary.value : currentAppConfig.model_secondary;
+    const isFallbackEnabled = fallbackToggle ? fallbackToggle.checked : false;
+
+    // Client-side cross-vendor validation
+    if (isFallbackEnabled && primaryVal && secondaryVal) {
+      const pCat = getModelCategory(primaryVal);
+      const sCat = getModelCategory(secondaryVal);
+      if (pCat === sCat) {
+        showToast('Primary and Secondary models cannot be from the same provider. Choose Gemini ↔ Claude/GPT.', 'error', 5000);
+        return;
+      }
+    }
+
+    const origText = btnSaveConfig.textContent;
+    btnSaveConfig.disabled = true;
+    btnSaveConfig.textContent = 'Saving...';
+
+    const payload = {
+      model_primary: primaryVal,
+      model_secondary: secondaryVal,
+      fallback_secondary_enabled: isFallbackEnabled
+    };
+
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || `HTTP ${res.status}`);
+      }
+
+      const updated = await res.json();
+      currentAppConfig = updated;
+      showToast('Model fallback configuration saved successfully', 'success', 3000);
+      if (configStatusMsg) {
+        configStatusMsg.textContent = `Saved at ${new Date().toLocaleTimeString()}`;
+        setTimeout(() => {
+          if (configStatusMsg) configStatusMsg.textContent = '';
+        }, 4000);
+      }
+    } catch (err) {
+      showToast(`Failed to save settings: ${err.message}`, 'error', 5000);
+    } finally {
+      btnSaveConfig.disabled = false;
+      btnSaveConfig.textContent = origText;
+    }
   }
 
   // =========================================================================
@@ -872,7 +1221,8 @@
         method: 'DELETE'
       });
       if (res.ok) {
-        showToast(`Account ${email} removed from pool`, 'info');
+        const displayEmail = isPrivacyMode ? '[redacted@email.com]' : email;
+        showToast(`Account ${displayEmail} removed from pool`, 'info');
         await Promise.all([fetchStatus(), fetchAccounts()]);
       } else {
         const err = await res.json().catch(() => ({}));
@@ -952,6 +1302,10 @@
         pillClass = 'pill-tokens';
         pillText = 'TOKENS';
         break;
+      case 'model_fallback':
+        pillClass = 'pill-fallback';
+        pillText = 'MODEL FALLBACK';
+        break;
       case 'error':
         pillClass = 'pill-error';
         pillText = 'ERROR';
@@ -960,11 +1314,12 @@
 
     const timeStr = formatTimeOnly(event.timestamp);
     const accPart = event.account_id ? `<span class="log-account">[${escapeHtml(event.account_id.slice(0, 8))}]</span> ` : '';
+    const formattedMsg = formatLogMessage(event.message || '');
 
     entry.innerHTML = `
       <span class="log-time">${escapeHtml(timeStr)}</span>
       <span class="log-pill ${pillClass}">${escapeHtml(pillText)}</span>
-      <span class="log-message">${accPart}${escapeHtml(event.message || '')}</span>
+      <span class="log-message">${accPart}${formattedMsg}</span>
     `;
 
     logsContainer.appendChild(entry);
@@ -982,7 +1337,7 @@
 
   function matchesFilter(event, filter) {
     if (filter === 'all') return true;
-    if (filter === 'failover' && event.type === 'failover_429') return true;
+    if (filter === 'failover' && (event.type === 'failover_429' || event.type === 'model_fallback')) return true;
     if (filter === 'quota' && (event.type === 'quota_exhausted' || event.type === 'quota_restored')) return true;
     if (filter === 'tokens' && event.type === 'tokens_captured') return true;
     if (filter === 'error' && event.type === 'error') return true;
@@ -1043,6 +1398,8 @@
             fetchAccounts();
           } else if (event.type === 'tokens_captured') {
             fetchMetrics();
+          } else if (event.type === 'model_fallback') {
+            fetchConfig();
           }
         } catch (err) {
           console.warn('Failed to parse SSE payload:', err);
@@ -1058,6 +1415,31 @@
   // =========================================================================
 
   function initListeners() {
+    // Model fallback toggle
+    if (fallbackToggle) {
+      fallbackToggle.addEventListener('change', () => {
+        updateToggleStatusText(fallbackToggle.checked);
+      });
+    }
+
+    // Dynamic secondary model options on primary model change
+    if (selectModelPrimary) {
+      selectModelPrimary.addEventListener('change', updateSecondaryOptions);
+    }
+
+    // Save model fallback settings
+    if (btnSaveConfig) {
+      btnSaveConfig.addEventListener('click', handleSaveConfig);
+    }
+
+    // Refresh models button
+    if (btnRefreshModels) {
+      btnRefreshModels.addEventListener('click', async () => {
+        await fetchModels();
+        showToast('AI models refreshed from Antigravity', 'info', 2000);
+      });
+    }
+
     // Sync / Refresh Quotas button
     const btnRefresh = document.getElementById('btn-refresh');
     const refreshIcon = document.getElementById('refresh-icon');
@@ -1129,11 +1511,32 @@
           const t = formatTimeOnly(evt.timestamp);
           const type = (evt.type || 'INFO').toUpperCase();
           const acc = evt.account_id ? `[${evt.account_id.slice(0, 8)}] ` : '';
-          return `[${t}] [${type}] ${acc}${evt.message || ''}`;
+          let msg = evt.message || '';
+          if (isPrivacyMode) {
+            msg = redactEmails(msg);
+          }
+          return `[${t}] [${type}] ${acc}${msg}`;
         }).join('\n');
-        copyToClipboard(textLines, 'Proxy logs');
+        copyToClipboard(textLines, isPrivacyMode ? 'Redacted proxy logs' : 'Proxy logs');
       });
     }
+
+    // Privacy Mode Toggle Button
+    const btnPrivacy = document.getElementById('btn-privacy');
+    if (btnPrivacy) {
+      btnPrivacy.addEventListener('click', togglePrivacyMode);
+    }
+
+    // Global keyboard shortcut: 'P' to toggle Privacy Mode
+    document.addEventListener('keydown', (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+        return;
+      }
+      if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        togglePrivacyMode();
+      }
+    });
 
     // Log scroll detection (pause auto-scroll when user inspects history)
     if (logsContainer) {
@@ -1173,10 +1576,13 @@
 
   // Application initialization
   document.addEventListener('DOMContentLoaded', () => {
+    updatePrivacyUI();
     initListeners();
     fetchStatus();
     fetchAccounts();
     fetchMetrics();
+    fetchConfig();
+    fetchModels();
     setupSSE();
 
     // Trigger one initial quota synchronization pass

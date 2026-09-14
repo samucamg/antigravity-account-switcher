@@ -83,13 +83,13 @@ func (m *mockMetricsRepo) getRecords() []*domain.TokenMetric {
 
 func TestSSEInterceptor_DualSchemaParsing(t *testing.T) {
 	tests := []struct {
-		name                 string
-		payload              string
-		expectedPrompt       int64
-		expectedCandidates   int64
-		expectedTotal        int64
-		expectedCached       int64
-		expectedThoughts     int64
+		name               string
+		payload            string
+		expectedPrompt     int64
+		expectedCandidates int64
+		expectedTotal      int64
+		expectedCached     int64
+		expectedThoughts   int64
 	}{
 		{
 			name: "nested response.usageMetadata (Google Cloud Code PA format)",
@@ -402,5 +402,44 @@ func TestSSEInterceptor_GzipStream(t *testing.T) {
 	}
 	if records[0].PromptTokens != 200 || records[0].CandidatesTokens != 80 || records[0].TotalTokens != 280 {
 		t.Errorf("token counts mismatch: %+v", records[0])
+	}
+}
+
+func TestSSEInterceptor_ModelVersionCaptureAndFormatting(t *testing.T) {
+	w := newMockResponseWriter()
+	metricsRepo := &mockMetricsRepo{}
+	broadcaster := NewBroadcaster(10)
+
+	eventsCh, unsubscribe := broadcaster.Subscribe()
+	defer unsubscribe()
+
+	payload := `data: {"response":{"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":50,"totalTokenCount":150},"modelVersion":"claude-opus-4-6-thinking"}}` + "\n\n"
+
+	err := StreamAndInterceptSSE(
+		context.Background(),
+		w,
+		strings.NewReader(payload),
+		"acc-modelver",
+		"/stream",
+		metricsRepo,
+		broadcaster,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	select {
+	case ev := <-eventsCh:
+		if ev.Type != domain.EventTypeTokensCaptured {
+			t.Errorf("expected event type %s, got %s", domain.EventTypeTokensCaptured, ev.Type)
+		}
+		if ev.Details["model_version"] != "claude-opus-4-6-thinking" {
+			t.Errorf("expected model_version claude-opus-4-6-thinking, got %v", ev.Details["model_version"])
+		}
+		if !strings.Contains(ev.Message, "[claude-opus-4-6-thinking]") {
+			t.Errorf("expected message to contain [claude-opus-4-6-thinking], got %s", ev.Message)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for EventTypeTokensCaptured event")
 	}
 }

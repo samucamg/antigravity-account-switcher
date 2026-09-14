@@ -4,24 +4,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const (
-	DefaultPort        = 8080
-	DefaultUpstreamURL = "https://daily-cloudcode-pa.googleapis.com"
-	DefaultInterval    = "5m"
-	DefaultQuotaWarningThreshold = 0.80 // 80% usage threshold for alert
-	DefaultQuotaSwitchThreshold  = 0.85 // 85% usage threshold for proactive account rotation
-	DefaultModelPrimary          = "gemini-2.5-pro"
-	DefaultModelSecondary        = "gemini-2.5-flash"
+	DefaultPort                     = 8080
+	DefaultUpstreamURL              = "https://daily-cloudcode-pa.googleapis.com"
+	DefaultInterval                 = "5m"
+	DefaultQuotaWarningThreshold    = 0.80 // 80% usage threshold for alert
+	DefaultQuotaSwitchThreshold     = 0.85 // 85% usage threshold for proactive account rotation
+	ConfigFileName                  = "config.json"
+	DefaultDBFileName               = "accounts.db"
+	DefaultModelPrimary             = "gemini-2.5-pro"
+	DefaultModelSecondary           = "gemini-2.5-flash"
 	DefaultFallbackSecondaryEnabled = false
-	ConfigFileName     = "config.json"
-	DefaultDBFileName  = "accounts.db"
 )
 
 // Config holds persistent user configuration.
@@ -83,33 +85,20 @@ func DefaultConfig() *Config {
 	}
 }
 
-// ParseBool parses string representations of boolean values.
-func ParseBool(val string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(val)) {
-	case "1", "t", "true", "yes", "y", "on":
-		return true, nil
-	case "0", "f", "false", "no", "n", "off":
-		return false, nil
-	default:
-		return false, fmt.Errorf("cannot parse %q as boolean", val)
-	}
-}
-
 // Load reads the configuration from disk, falling back to defaults if missing.
 func Load() (*Config, error) {
 	cfg := DefaultConfig()
 	path := ConfigFilePath()
 
 	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil
-		}
+	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to read config file at %s: %w", path, err)
 	}
 
-	if err := json.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config JSON at %s: %w", path, err)
+	if err == nil {
+		if err := json.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("failed to parse config JSON at %s: %w", path, err)
+		}
 	}
 
 	if cfg.QuotaWarningThreshold <= 0 {
@@ -136,10 +125,14 @@ func Load() (*Config, error) {
 		cfg.UpstreamURL = envUpstream
 	}
 	if envPrimary := os.Getenv("ANTIGRAVITY_MODEL_PRIMARY"); envPrimary != "" {
-		cfg.ModelPrimary = strings.TrimSpace(envPrimary)
+		if trimmed := strings.TrimSpace(envPrimary); trimmed != "" {
+			cfg.ModelPrimary = trimmed
+		}
 	}
 	if envSecondary := os.Getenv("ANTIGRAVITY_MODEL_SECONDARY"); envSecondary != "" {
-		cfg.ModelSecondary = strings.TrimSpace(envSecondary)
+		if trimmed := strings.TrimSpace(envSecondary); trimmed != "" {
+			cfg.ModelSecondary = trimmed
+		}
 	}
 	if envFallback := os.Getenv("ANTIGRAVITY_FALLBACK_SECONDARY_ENABLED"); envFallback != "" {
 		if b, err := ParseBool(envFallback); err == nil {
@@ -153,6 +146,7 @@ func Load() (*Config, error) {
 		cfg.RemoteAuthToken = strings.TrimSpace(envAuthToken)
 	}
 
+	// Defensive defaults if unmarshaled JSON contained explicit empty strings
 	if cfg.ModelPrimary == "" {
 		cfg.ModelPrimary = DefaultModelPrimary
 	}
@@ -180,6 +174,56 @@ func Save(cfg *Config) error {
 		return fmt.Errorf("failed to write config to %s: %w", path, err)
 	}
 
+	return nil
+}
+
+// ParseBool parses string representations of boolean values.
+// Recognizes truthy values: "1", "t", "true", "yes", "y", "on" (case-insensitive).
+// Recognizes falsy values: "0", "f", "false", "no", "n", "off" (case-insensitive).
+// Any other string returns an error.
+func ParseBool(val string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(val)) {
+	case "1", "t", "true", "yes", "y", "on":
+		return true, nil
+	case "0", "f", "false", "no", "n", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("cannot parse %q as boolean", val)
+	}
+}
+
+// Validate verifies configuration boundaries, network URLs, and model fallback invariants.
+func (c *Config) Validate() error {
+	if c.Port < 1 || c.Port > 65535 {
+		return fmt.Errorf("invalid port %d: must be between 1 and 65535", c.Port)
+	}
+	if c.UpstreamURL != "" {
+		parsed, err := url.Parse(c.UpstreamURL)
+		if err != nil {
+			return fmt.Errorf("invalid upstream_url %q: %w", c.UpstreamURL, err)
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return fmt.Errorf("invalid upstream_url %q: scheme must be http or https", c.UpstreamURL)
+		}
+	}
+	if c.QuotaInterval != "" {
+		if _, err := time.ParseDuration(c.QuotaInterval); err != nil {
+			return fmt.Errorf("invalid quota_interval %q: %w", c.QuotaInterval, err)
+		}
+	}
+	if c.FallbackSecondaryEnabled {
+		primary := strings.TrimSpace(c.ModelPrimary)
+		secondary := strings.TrimSpace(c.ModelSecondary)
+		if primary == "" {
+			return errors.New("model_primary cannot be empty when fallback_secondary_enabled is true")
+		}
+		if secondary == "" {
+			return errors.New("model_secondary cannot be empty when fallback_secondary_enabled is true")
+		}
+		if strings.EqualFold(primary, secondary) {
+			return fmt.Errorf("model_primary and model_secondary cannot be identical (%q)", c.ModelPrimary)
+		}
+	}
 	return nil
 }
 
@@ -217,7 +261,6 @@ func CandidateAntigravityPaths() []string {
 		candidates = append(candidates,
 			// 1. Standard XDG user application directories (Recommended, no sudo)
 			filepath.Join(home, ".local", "bin", "antigravity"),
-			filepath.Join(home, ".local", "bin", "agy"),
 			filepath.Join(home, ".local", "share", "antigravity", "antigravity"),
 			filepath.Join(home, ".local", "share", "antigravity", "Antigravity-x64", "antigravity"),
 			filepath.Join(home, ".local", "share", "Antigravity", "antigravity"),
@@ -239,7 +282,6 @@ func CandidateAntigravityPaths() []string {
 	// 4. System-wide FHS locations (Installed via sudo into /opt or /usr/local/bin)
 	candidates = append(candidates,
 		"/usr/local/bin/antigravity",
-		"/usr/local/bin/agy",
 		"/opt/antigravity/antigravity",
 		"/opt/antigravity/Antigravity-x64/antigravity",
 		"/opt/Antigravity/antigravity",

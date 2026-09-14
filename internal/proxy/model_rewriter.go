@@ -416,47 +416,12 @@ func RewriteModelInBody(body []byte, targetModel string) ([]byte, error) {
 
 	// Cross-vendor payload adaptation for Antigravity request payloads containing nested "request"
 	if bytes.Contains(body, []byte(`"request"`)) {
-		var doc map[string]interface{}
+		var doc map[string]any
 		if err := json.Unmarshal(newBody, &doc); err == nil {
-			if req, ok := doc["request"].(map[string]interface{}); ok {
+			if _, ok := GetRequestMap(doc); ok {
 				targetCat := CategorizeModel(cleanTarget)
-				maxOut := MaxOutputTokensForModel(cleanTarget)
-				changed := false
-
-				if genCfg, ok := req["generationConfig"].(map[string]interface{}); ok {
-					if currMax, ok := genCfg["maxOutputTokens"].(float64); ok && int(currMax) > maxOut {
-						genCfg["maxOutputTokens"] = maxOut
-						changed = true
-					}
-					if targetCat == CategoryClaudeGPT {
-						if thkCfg, ok := genCfg["thinkingConfig"].(map[string]interface{}); ok {
-							if budget, ok := thkCfg["thinkingBudget"].(float64); ok && budget < 1024 {
-								thkCfg["thinkingBudget"] = 1024
-								changed = true
-							}
-						}
-					}
-				}
-
-				if labels, ok := req["labels"].(map[string]interface{}); ok {
-					if targetCat == CategoryClaudeGPT {
-						labels["used_claude"] = "true"
-						labels["used_claude_conservative"] = "true"
-						labels["used_non_gemini_model"] = "true"
-						changed = true
-					} else if targetCat == CategoryGemini {
-						labels["used_claude"] = "false"
-						labels["used_claude_conservative"] = "false"
-						labels["used_non_gemini_model"] = "false"
-						changed = true
-					}
-					if placeholder, exists := ModelPlaceholderMap[cleanTarget]; exists {
-						labels["model_enum"] = placeholder
-						changed = true
-					}
-				}
-
-				if changed {
+				adapter := GetPayloadAdapter(targetCat)
+				if changed, err := adapter.Adapt(doc, cleanTarget); err == nil && changed {
 					if remarshaled, err := json.Marshal(doc); err == nil {
 						newBody = remarshaled
 					}
@@ -626,4 +591,38 @@ func ExtractModelFromRequest(r *http.Request, body []byte) (model string, catego
 		}
 	}
 	return "", CategoryUnknown, SourceNone
+}
+
+// SanitizeGeminiSignatures sanitizes all model turns in a Google Cloud Code PA / Gemini payload:
+// 1. Strips all 'thought: true' blocks from past turns.
+// 2. Forces 'thoughtSignature': 'skip_thought_signature_validator' on all 'functionCall' parts.
+// This is used for recovery when upstream returns HTTP 400 'Corrupted thought signature' or 'missing a thought_signature'.
+func SanitizeGeminiSignatures(body []byte) ([]byte, error) {
+	if len(body) == 0 || (!bytes.Contains(body, []byte(`"request"`)) && !bytes.Contains(body, []byte(`"contents"`))) {
+		return body, nil
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return body, err
+	}
+
+	changed := MutateParts(doc, func(role string, part map[string]any) (keep bool, modified bool) {
+		if isThought, _ := part["thought"].(bool); isThought {
+			return false, true
+		}
+		if _, hasFunc := part["functionCall"]; hasFunc {
+			if sig, _ := part["thoughtSignature"].(string); sig != "skip_thought_signature_validator" {
+				part["thoughtSignature"] = "skip_thought_signature_validator"
+				return true, true
+			}
+		}
+		return true, false
+	})
+
+	if !changed {
+		return body, nil
+	}
+
+	return json.Marshal(doc)
 }

@@ -5,8 +5,7 @@ BINARY := bin/antigravity-account-switcher
 
 GOLANGCI_LINT ?= go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6 run ./...
 
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.2.0")
-COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "v1.1.0")COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 LDFLAGS := -s -w \
@@ -15,7 +14,6 @@ LDFLAGS := -s -w \
 	-X main.Date=$(DATE)
 
 .PHONY: all build build-static test test-race test-cover lint fmt tidy clean run wrap help
-
 all: build
 
 ## build: Compiles the single binary with CGO_ENABLED=0
@@ -44,14 +42,16 @@ test-cover:
 	go tool cover -html=coverage.txt -o coverage.html
 	@echo "Coverage report generated at coverage.html"
 
+## fmt: Formats all Go source files according to standard Go conventions
+fmt:
+	gofmt -s -w .
+	@echo "Formatted all Go files with gofmt"
+
 ## lint: Runs code linters (go vet and golangci-lint)
 lint:
 	go vet ./...
 	$(GOLANGCI_LINT)
 
-## fmt: Formats all Go source files with canonical gofmt rules
-fmt:
-	gofmt -s -w .
 
 ## tidy: Ensures go.mod and go.sum consistency
 tidy:
@@ -65,7 +65,7 @@ clean:
 ## install: Installs the binary to ~/.local/bin
 install: build
 	@mkdir -p $(HOME)/.local/bin
-	cp $(BINARY) $(HOME)/.local/bin/
+	install -m 755 $(BINARY) $(HOME)/.local/bin/
 	@echo "Installed $(BINARY) to $(HOME)/.local/bin/antigravity-account-switcher"
 
 ## uninstall: Removes the binary from ~/.local/bin

@@ -36,7 +36,7 @@ func (m *mockAccountRepo) List(ctx context.Context) ([]*domain.Account, error) {
 	}
 	return m.accounts, nil
 }
-func (m *mockAccountRepo) SetActive(ctx context.Context, id string) error                 { return nil }
+func (m *mockAccountRepo) SetActive(ctx context.Context, id string) error { return nil }
 func (m *mockAccountRepo) UpdateStatus(ctx context.Context, id string, status domain.AccountStatus) error {
 	return nil
 }
@@ -52,17 +52,20 @@ func (m *mockAccountRepo) GetNextAvailable(ctx context.Context, excludeID string
 }
 
 type mockMetricsRepo struct {
-	summaryRes         *domain.AggregatedMetrics
-	summariesRes       map[string]*domain.AggregatedMetrics
-	dailyHistoryRes    []*domain.DailyTokenUsage
-	recorded           []*domain.TokenMetric
-	summaryCalls       []struct{ accID, period string }
-	summariesCalls     []string
-	dailyHistoryCalls  []struct{ accID string; days int }
-	recordErr          error
-	summaryErr         error
-	summariesErr       error
-	dailyHistoryErr    error
+	summaryRes        *domain.AggregatedMetrics
+	summariesRes      map[string]*domain.AggregatedMetrics
+	dailyHistoryRes   []*domain.DailyTokenUsage
+	recorded          []*domain.TokenMetric
+	summaryCalls      []struct{ accID, period string }
+	summariesCalls    []string
+	dailyHistoryCalls []struct {
+		accID string
+		days  int
+	}
+	recordErr       error
+	summaryErr      error
+	summariesErr    error
+	dailyHistoryErr error
 }
 
 func (m *mockMetricsRepo) Record(ctx context.Context, metric *domain.TokenMetric) error {
@@ -93,7 +96,10 @@ func (m *mockMetricsRepo) GetAccountSummaries(ctx context.Context, period string
 }
 
 func (m *mockMetricsRepo) GetDailyHistory(ctx context.Context, accountID string, days int) ([]*domain.DailyTokenUsage, error) {
-	m.dailyHistoryCalls = append(m.dailyHistoryCalls, struct{ accID string; days int }{accountID, days})
+	m.dailyHistoryCalls = append(m.dailyHistoryCalls, struct {
+		accID string
+		days  int
+	}{accountID, days})
 	if m.dailyHistoryErr != nil {
 		return nil, m.dailyHistoryErr
 	}
@@ -322,6 +328,70 @@ func TestService_GetDashboardPayload(t *testing.T) {
 	}
 	if len(payload.Timeline) != 7 {
 		t.Errorf("expected 7 timeline points, got %d", len(payload.Timeline))
+	}
+}
+
+func TestService_GetDailyUsageInLocation_Timezone(t *testing.T) {
+	locSP := time.FixedZone("America/Sao_Paulo", -3*3600)
+	nowSP := time.Now().In(locSP)
+	todaySP := nowSP.Format("2006-01-02")
+
+	metricsRepo := &mockMetricsRepo{
+		dailyHistoryRes: []*domain.DailyTokenUsage{
+			{Date: todaySP, TotalTokens: 420},
+		},
+	}
+	svc := NewService(metricsRepo, nil)
+
+	filled, err := svc.GetDailyUsageInLocation(context.Background(), "", 7, true, locSP)
+	if err != nil {
+		t.Fatalf("GetDailyUsageInLocation failed: %v", err)
+	}
+
+	if len(filled) != 7 {
+		t.Fatalf("expected 7 entries, got %d", len(filled))
+	}
+
+	// Last entry must match today in the specified timezone
+	last := filled[len(filled)-1]
+	if last.Date != todaySP {
+		t.Errorf("expected last entry date to be %s, got %s", todaySP, last.Date)
+	}
+	if last.TotalTokens != 420 {
+		t.Errorf("expected 420 tokens, got %d", last.TotalTokens)
+	}
+}
+
+func TestService_GetDashboardPayloadWithLocation(t *testing.T) {
+	accRepo := &mockAccountRepo{
+		accounts: []*domain.Account{
+			{ID: "acc-1", Email: "primary@example.com", Status: domain.AccountStatusActive, IsActive: true},
+		},
+	}
+	locSP := time.FixedZone("America/Sao_Paulo", -3*3600)
+	todaySP := time.Now().In(locSP).Format("2006-01-02")
+
+	metricsRepo := &mockMetricsRepo{
+		summaryRes:   &domain.AggregatedMetrics{TotalTokens: 800},
+		summariesRes: map[string]*domain.AggregatedMetrics{"acc-1": {TotalTokens: 800}},
+		dailyHistoryRes: []*domain.DailyTokenUsage{
+			{Date: todaySP, TotalTokens: 800},
+		},
+	}
+
+	svc := NewService(metricsRepo, accRepo)
+
+	payload, err := svc.GetDashboardPayloadWithLocation(context.Background(), 14, locSP)
+	if err != nil {
+		t.Fatalf("GetDashboardPayloadWithLocation failed: %v", err)
+	}
+
+	if len(payload.Timeline) != 14 {
+		t.Fatalf("expected 14 timeline days, got %d", len(payload.Timeline))
+	}
+	last := payload.Timeline[len(payload.Timeline)-1]
+	if last.Date != todaySP {
+		t.Errorf("expected last timeline date %s, got %s", todaySP, last.Date)
 	}
 }
 

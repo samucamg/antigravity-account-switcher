@@ -1238,10 +1238,13 @@
     if (btn) btn.disabled = true;
 
     try {
-      const res = await fetch('/oauth/start', { method: 'POST' });
+      const res = await fetch('/api/oauth/start', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        showToast('OAuth flow initiated. Complete Google sign-in in your browser window.', 'info', 6000);
+        if (data.auth_url) {
+          window.open(data.auth_url, '_blank');
+        }
+        showToast('OAuth flow started in browser. Check the new tab to authenticate.', 'info', 5000);
       } else {
         showToast(data.error?.message || 'Failed to initiate OAuth authorization', 'error');
       }
@@ -1841,13 +1844,17 @@
       if (isStopping) {
         await fetch('/api/tunnel/stop', { method: 'POST' });
       } else {
-        await fetch('/api/tunnel/start', {
+        const res = await fetch('/api/tunnel/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'quick' })
         });
+        const data = await res.json().catch(()=>({}));
+        if (!res.ok) throw new Error(data.error?.message || data.error || 'Failed to start tunnel');
       }
-    } catch (_) {}
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
 
     await fetchTunnelStatus();
   }
@@ -1865,13 +1872,17 @@
       if (isStopping) {
         await fetch('/api/tunnel/stop', { method: 'POST' });
       } else {
-        await fetch('/api/tunnel/start', {
+        const res = await fetch('/api/tunnel/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'zero_trust', token: input ? input.value : '' })
         });
+        const data = await res.json().catch(()=>({}));
+        if (!res.ok) throw new Error(data.error?.message || data.error || 'Failed to start tunnel');
       }
-    } catch (_) {}
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
 
     await fetchTunnelStatus();
   }

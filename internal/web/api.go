@@ -547,6 +547,7 @@ func (a *APIHandler) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, statusCode int, data any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(data)
 }

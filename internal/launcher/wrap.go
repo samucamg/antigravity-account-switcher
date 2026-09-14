@@ -34,6 +34,10 @@ type Config struct {
 	Stdout       io.Writer
 	Stderr       io.Writer
 
+	ModelPrimary             string
+	ModelSecondary           string
+	FallbackSecondaryEnabled bool
+
 	// Injectable dependencies for unit and integration testing
 	DB     *sqlite.DB
 	Server *web.Server
@@ -42,6 +46,15 @@ type Config struct {
 
 // Option configures Wrap behavior.
 type Option func(*Config)
+
+// WithModelFallback configures the model fallback tier mechanism for wrapped environments.
+func WithModelFallback(primary, secondary string, enabled bool) Option {
+	return func(c *Config) {
+		c.ModelPrimary = primary
+		c.ModelSecondary = secondary
+		c.FallbackSecondaryEnabled = enabled
+	}
+}
 
 // WithPort sets the switcher listening port (0 allocates a random ephemeral port).
 func WithPort(p int) Option {
@@ -189,7 +202,13 @@ func Wrap(ctx context.Context, cmdArgs []string, opts ...Option) (int, error) {
 		eventRepo = sqlite.NewEventRepository(db)
 
 		broadcaster = proxy.NewBroadcaster(100)
-		failoverEngine := proxy.NewFailoverEngine(accRepo, broadcaster, eventRepo)
+		failoverEngine := proxy.NewFailoverEngine(
+			accRepo,
+			broadcaster,
+			eventRepo,
+			proxy.WithFailoverQuotaRepository(quotaRepo),
+			proxy.WithModelFallback(cfg.ModelPrimary, cfg.ModelSecondary, cfg.FallbackSecondaryEnabled),
+		)
 		oauthService = oauth.NewOAuthService(accRepo)
 
 		// Automatically import existing Antigravity login if pool is empty
@@ -205,6 +224,7 @@ func Wrap(ctx context.Context, cmdArgs []string, opts ...Option) (int, error) {
 
 		proxyOpts := []proxy.Option{
 			proxy.WithMetricsRepository(metricsRepo),
+			proxy.WithQuotaRepository(quotaRepo),
 			proxy.WithEventBroadcaster(broadcaster),
 			proxy.WithEventRepository(eventRepo),
 			proxy.WithFailoverEngine(failoverEngine),

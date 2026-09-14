@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"strings"
 	"time"
 
 	"github.com/samucamg/antigravity-account-switcher/internal/config"
@@ -287,7 +286,6 @@ func runServe(args []string) {
 		fmt.Printf("    Cloudflare Tunnel: Ready (found at %s)\n", p)
 	} else {
 		fmt.Printf("    Cloudflare Tunnel: Available (install cloudflared for 1-click tunnels)\n")
-	}
 	}
 	fmt.Println("\nPress Ctrl+C to stop.")
 

@@ -85,9 +85,11 @@ if (`$ideBin -ne '' -and (Test-Path `$ideBin)) {
     `$env:CLOUD_CODE_URL = "http://127.0.0.1:`$port"
     Write-Host 'Launching Antigravity IDE through proxy...' -ForegroundColor Cyan
     & `$ideBin
-    Write-Host 'IDE closed. Server still running.' -ForegroundColor Cyan
+    Write-Host 'IDE fechada. Encerrando o servidor proxy...' -ForegroundColor Cyan
+    Get-Process -Name 'antigravity-account-switcher' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 } else {
     Write-Host 'IDE not found. Edit start.ps1 and set `$ideBin.' -ForegroundColor Yellow
+    Write-Host 'Pressione qualquer tecla (CTRL+C) para encerrar o proxy...' -ForegroundColor Yellow
 }
 "@
 [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot 'start.ps1'), $startContent, $enc)

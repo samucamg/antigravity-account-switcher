@@ -71,4 +71,6 @@ $env:CLOUD_CODE_URL = "http://127.0.0.1:$port"
 
 Write-Host "Launching Antigravity IDE through proxy..." -ForegroundColor Cyan
 & $ideBin
-Write-Host "IDE closed. Server still running at http://127.0.0.1:$port/" -ForegroundColor Cyan
+Write-Host "IDE fechada. Encerrando o servidor proxy..." -ForegroundColor Cyan
+Get-Process -Name "antigravity-account-switcher" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+

@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/store/sqlite"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/store/sqlite"
 )
 
 // failoverStressTestEnv encapsulates an isolated proxy handler environment with a mock upstream.
@@ -62,7 +62,7 @@ func newFailoverStressTestEnv(
 		accRepo,
 		broadcaster,
 		eventRepo,
-		WithQuotaRepository(quotaRepo),
+		WithFailoverQuotaRepository(quotaRepo),
 		WithModelFallback(primary, secondary, fallbackEnabled),
 	)
 

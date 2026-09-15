@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/config"
+	"github.com/samucamg/antigravity-account-switcher/internal/config"
 )
 
 // TestCLI_ConfigErrors_ExitCode1 tests that all malformed/invalid config invocations return exit code 1.

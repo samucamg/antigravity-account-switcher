@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/store/sqlite"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/test/mocks"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/store/sqlite"
+	"github.com/samucamg/antigravity-account-switcher/test/mocks"
 )
 
 type fallbackTestEnv struct {
@@ -52,7 +52,7 @@ func newFallbackTestEnv(t *testing.T, primary, secondary string, fallbackEnabled
 		accRepo,
 		broadcaster,
 		eventRepo,
-		WithQuotaRepository(quotaRepo),
+		WithFailoverQuotaRepository(quotaRepo),
 		WithModelFallback(primary, secondary, fallbackEnabled),
 	)
 

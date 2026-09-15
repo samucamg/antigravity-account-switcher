@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/config"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/test/mocks"
+	"github.com/samucamg/antigravity-account-switcher/internal/config"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/test/mocks"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 	eventTypeModelFallback = domain.EventType("model_fallback")
 
 	defaultPrimaryModel   = "gemini-2.5-pro"
-	defaultSecondaryModel = "claude-3-5-sonnet"
+	defaultSecondaryModel = "gemini-2.5-flash"
 )
 
 // --- Shared Test Helpers ---
@@ -151,8 +151,8 @@ func TestTier1_F1_ConfigSchemaAndValidation(t *testing.T) {
 		if !strings.Contains(out, "model_primary") || !strings.Contains(out, defaultPrimaryModel) {
 			t.Errorf("expected default model_primary '%s' in output: %s", defaultPrimaryModel, out)
 		}
-		if !strings.Contains(out, "model_secondary") || !strings.Contains(out, "claude-3-5-sonnet") {
-			t.Errorf("expected default model_secondary 'claude-3-5-sonnet' in output: %s", out)
+		if !strings.Contains(out, "model_secondary") || !strings.Contains(out, defaultSecondaryModel) {
+			t.Errorf("expected default model_secondary %q in output: %s", defaultSecondaryModel, out)
 		}
 		if !strings.Contains(out, "fallback_secondary_enabled") || !strings.Contains(out, "false") {
 			t.Errorf("expected default fallback_secondary_enabled false in output: %s", out)

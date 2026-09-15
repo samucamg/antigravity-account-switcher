@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/proxy"
+	"github.com/samucamg/antigravity-account-switcher/internal/proxy"
 )
 
 // buildAdversarial10MBPayload constructs a 10MB JSON payload containing hundreds of

@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/proxy"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/proxy"
 )
 
 // generateTestPayload constructs a valid JSON payload containing model and filler text of targetSize.
@@ -1339,5 +1339,44 @@ func TestSanitizeGeminiSignatures(t *testing.T) {
 	part := modelParts[0].(map[string]any)
 	if part["thoughtSignature"] != "skip_thought_signature_validator" {
 		t.Errorf("expected skip_thought_signature_validator, got %v", part["thoughtSignature"])
+	}
+}
+
+// TestModelHasSonnet_Haiku_Opus tests the Claude family token detection helpers.
+func TestModelHasSonnet_Haiku_Opus(t *testing.T) {
+	cases := []struct {
+		model         string
+		wantSonnet    bool
+		wantHaiku     bool
+		wantOpus      bool
+	}{
+		{"claude-sonnet-4-6", true, false, false},
+		{"claude-3-5-sonnet", true, false, false},
+		{"CLAUDE-SONNET-4-6", true, false, false},  // uppercase
+		{"models/claude-sonnet-4-6", true, false, false}, // models/ prefix
+		{"claude-haiku-4-5", false, true, false},
+		{"claude-3-haiku-20240307", false, true, false},
+		{"claude-opus-4", false, false, true},
+		{"claude-3-opus-20240229", false, false, true},
+		{"gemini-2.5-pro", false, false, false},
+		{"gemini-2.5-flash", false, false, false},
+		{"gpt-4o", false, false, false},
+		{"", false, false, false},
+		{"models/", false, false, false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.model, func(t *testing.T) {
+			if got := proxy.ModelHasSonnet(tc.model); got != tc.wantSonnet {
+				t.Errorf("ModelHasSonnet(%q) = %v, want %v", tc.model, got, tc.wantSonnet)
+			}
+			if got := proxy.ModelHasHaiku(tc.model); got != tc.wantHaiku {
+				t.Errorf("ModelHasHaiku(%q) = %v, want %v", tc.model, got, tc.wantHaiku)
+			}
+			if got := proxy.ModelHasOpus(tc.model); got != tc.wantOpus {
+				t.Errorf("ModelHasOpus(%q) = %v, want %v", tc.model, got, tc.wantOpus)
+			}
+		})
 	}
 }

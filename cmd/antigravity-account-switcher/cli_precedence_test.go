@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/config"
+	"github.com/samucamg/antigravity-account-switcher/internal/config"
 )
 
 // TestCLI_PrecedenceMatrix verifies the complete 4-tier precedence hierarchy:
@@ -401,7 +401,7 @@ func TestCLI_SubprocessBinaryExecution(t *testing.T) {
 		outputStr := string(out)
 		expectedKeys := []string{
 			"model_primary:              gemini-2.5-pro",
-			"model_secondary:            claude-3-5-sonnet",
+			"model_secondary:            gemini-2.5-flash",
 			"fallback_secondary_enabled: false",
 		}
 		for _, ek := range expectedKeys {

@@ -19,7 +19,7 @@ import (
 // TestChallenger1_ContextCancellation_DeferredRollback tests that when client contexts
 // are cancelled mid-transaction or during contention, the deferred tx.Rollback()
 // cleans up resources properly without corrupting state or deadlocking the connection pool.
-func TestChallenger1_ContextCancellation_DeferredRollback(t *testing.T) {
+func TestSQLiteStore_ContextCancellation_DeferredRollback(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "challenger1_ctx_cancel.db")
 	db, err := sqlite.Open(dbPath)
 	if err != nil {
@@ -173,7 +173,7 @@ func TestChallenger1_ContextCancellation_DeferredRollback(t *testing.T) {
 // TestChallenger1_PartialBatchUpsert_RollbackIsolation tests that when a multi-statement
 // transaction (UpsertBuckets) fails midway through a batch, the deferred tx.Rollback()
 // guarantees 100% atomicity: ZERO items from the failing batch are committed to disk.
-func TestChallenger1_PartialBatchUpsert_RollbackIsolation(t *testing.T) {
+func TestSQLiteStore_PartialBatchUpsert_RollbackIsolation(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "challenger1_batch_isolation.db")
 	db, err := sqlite.Open(dbPath)
 	if err != nil {
@@ -318,7 +318,7 @@ func TestChallenger1_PartialBatchUpsert_RollbackIsolation(t *testing.T) {
 // Step 1 (deactivate current), fails on Step 2, and triggers deferred tx.Rollback().
 // Under heavy concurrent readers and writers, no reader must ever observe a state where
 // 0 accounts are active.
-func TestChallenger1_SetActive_RollbackAtomicity_UnderExtremeContention(t *testing.T) {
+func TestSQLiteStore_SetActive_RollbackAtomicity_UnderExtremeContention(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "challenger1_setactive_atomicity.db")
 	db, err := sqlite.Open(dbPath)
 	if err != nil {
@@ -470,7 +470,7 @@ func TestChallenger1_SetActive_RollbackAtomicity_UnderExtremeContention(t *testi
 // occurs during transaction processing (which is recovered by caller), the deferred
 // rollback ensures that the SQLite single connection pool is returned cleanly
 // and subsequent transactions proceed without error or deadlock.
-func TestChallenger1_PanicRecovery_DeferredRollbackCleanliness(t *testing.T) {
+func TestSQLiteStore_PanicRecovery_DeferredRollbackCleanliness(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "challenger1_panic_recovery.db")
 	db, err := sqlite.Open(dbPath)
 	if err != nil {
@@ -581,7 +581,7 @@ func TestChallenger1_PanicRecovery_DeferredRollbackCleanliness(t *testing.T) {
 // TestChallenger1_MultiHandle_ExtremeRollbackStorm creates multiple distinct SQLite database
 // handles pointing to the same file (simulating concurrent processes or reload handles) and
 // launches a mixed storm of high-frequency rollbacks and commits across all handles.
-func TestChallenger1_MultiHandle_ExtremeRollbackStorm(t *testing.T) {
+func TestSQLiteStore_MultiHandle_ExtremeRollbackStorm(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "challenger1_multihandle_storm.db")
 	primaryDB, err := sqlite.Open(dbPath)
 	if err != nil {

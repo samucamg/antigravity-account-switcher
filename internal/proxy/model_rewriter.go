@@ -355,6 +355,99 @@ func MaxOutputTokensForModel(model string) int {
 	return 65536
 }
 
+// ModelHasSonnet reports whether model contains the "sonnet" family token.
+// Performs 0 heap allocations via stack-allocated lowercasing for models up to 64 bytes.
+func ModelHasSonnet(model string) bool {
+	m := strings.TrimPrefix(strings.TrimSpace(model), "models/")
+	if len(m) == 0 {
+		return false
+	}
+	var buf [64]byte
+	var lower string
+	if len(m) <= len(buf) {
+		hasUpper := false
+		for i := 0; i < len(m); i++ {
+			c := m[i]
+			if c >= 'A' && c <= 'Z' {
+				buf[i] = c + ('a' - 'A')
+				hasUpper = true
+			} else {
+				buf[i] = c
+			}
+		}
+		if hasUpper {
+			lower = string(buf[:len(m)])
+		} else {
+			lower = m
+		}
+	} else {
+		lower = strings.ToLower(m)
+	}
+	return strings.Contains(lower, "sonnet")
+}
+
+// ModelHasHaiku reports whether model contains the "haiku" family token.
+// Performs 0 heap allocations via stack-allocated lowercasing for models up to 64 bytes.
+func ModelHasHaiku(model string) bool {
+	m := strings.TrimPrefix(strings.TrimSpace(model), "models/")
+	if len(m) == 0 {
+		return false
+	}
+	var buf [64]byte
+	var lower string
+	if len(m) <= len(buf) {
+		hasUpper := false
+		for i := 0; i < len(m); i++ {
+			c := m[i]
+			if c >= 'A' && c <= 'Z' {
+				buf[i] = c + ('a' - 'A')
+				hasUpper = true
+			} else {
+				buf[i] = c
+			}
+		}
+		if hasUpper {
+			lower = string(buf[:len(m)])
+		} else {
+			lower = m
+		}
+	} else {
+		lower = strings.ToLower(m)
+	}
+	return strings.Contains(lower, "haiku")
+}
+
+// ModelHasOpus reports whether model contains the "opus" family token.
+// Performs 0 heap allocations via stack-allocated lowercasing for models up to 64 bytes.
+func ModelHasOpus(model string) bool {
+	m := strings.TrimPrefix(strings.TrimSpace(model), "models/")
+	if len(m) == 0 {
+		return false
+	}
+	var buf [64]byte
+	var lower string
+	if len(m) <= len(buf) {
+		hasUpper := false
+		for i := 0; i < len(m); i++ {
+			c := m[i]
+			if c >= 'A' && c <= 'Z' {
+				buf[i] = c + ('a' - 'A')
+				hasUpper = true
+			} else {
+				buf[i] = c
+			}
+		}
+		if hasUpper {
+			lower = string(buf[:len(m)])
+		} else {
+			lower = m
+		}
+	} else {
+		lower = strings.ToLower(m)
+	}
+	return strings.Contains(lower, "opus")
+}
+
 // RewriteModelInBody creates a new byte slice replacing the root-level model with targetModel,
 // and adjusts vendor-specific constraints (maxOutputTokens, thinkingBudget, labels) if nested request exists.
 func RewriteModelInBody(body []byte, targetModel string) ([]byte, error) {

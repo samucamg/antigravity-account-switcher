@@ -36,8 +36,8 @@ func TestConfig_ModelDefaults(t *testing.T) {
 	if DefaultModelPrimary != "gemini-2.5-pro" {
 		t.Errorf("expected DefaultModelPrimary to be gemini-2.5-pro, got %s", DefaultModelPrimary)
 	}
-	if DefaultModelSecondary != "claude-3-5-sonnet" {
-		t.Errorf("expected DefaultModelSecondary to be claude-3-5-sonnet, got %s", DefaultModelSecondary)
+	if DefaultModelSecondary != "gemini-2.5-flash" {
+		t.Errorf("expected DefaultModelSecondary to be gemini-2.5-flash, got %s", DefaultModelSecondary)
 	}
 	if DefaultFallbackSecondaryEnabled != false {
 		t.Errorf("expected DefaultFallbackSecondaryEnabled to be false, got %t", DefaultFallbackSecondaryEnabled)

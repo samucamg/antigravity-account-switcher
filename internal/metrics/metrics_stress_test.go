@@ -34,7 +34,7 @@ func setupStressDB(t *testing.T) (*sqlite.DB, *sqlite.AccountRepository, *sqlite
 // TestChallenger_Metrics_TimelineZeroFilling_WideDateRanges verifies zero-filling
 // accuracy across multiple date windows (1, 14, 30, 90, 365, 1000 days),
 // non-positive inputs, and validates strict 1-day step continuity and boundaries.
-func TestChallenger_Metrics_TimelineZeroFilling_WideDateRanges(t *testing.T) {
+func TestMetrics_TimelineZeroFilling_WideDateRanges(t *testing.T) {
 	_, accRepo, _, svc := setupStressDB(t)
 	ctx := context.Background()
 
@@ -170,7 +170,7 @@ func TestChallenger_Metrics_TimelineZeroFilling_WideDateRanges(t *testing.T) {
 
 // TestChallenger_Metrics_MultiAccount_ConcurrentQueriesAndWrites stresses the metrics
 // engine with 10 accounts and dozens of concurrent goroutines mixing writes and reads.
-func TestChallenger_Metrics_MultiAccount_ConcurrentQueriesAndWrites(t *testing.T) {
+func TestMetrics_MultiAccount_ConcurrentQueriesAndWrites(t *testing.T) {
 	_, accRepo, _, svc := setupStressDB(t)
 	ctx := context.Background()
 
@@ -320,7 +320,7 @@ func TestChallenger_Metrics_MultiAccount_ConcurrentQueriesAndWrites(t *testing.T
 }
 
 // TestChallenger_Metrics_PeriodNormalization tests edge cases in period strings.
-func TestChallenger_Metrics_PeriodNormalization(t *testing.T) {
+func TestMetrics_PeriodNormalization(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   domain.MetricPeriod
@@ -363,7 +363,7 @@ func TestChallenger_Metrics_PeriodNormalization(t *testing.T) {
 }
 
 // TestChallenger_Metrics_AccountValidation verifies GetSummary errors when account does not exist.
-func TestChallenger_Metrics_AccountValidation(t *testing.T) {
+func TestMetrics_AccountValidation(t *testing.T) {
 	_, _, _, svc := setupStressDB(t)
 	ctx := context.Background()
 

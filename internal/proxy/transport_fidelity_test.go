@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/proxy"
+	"github.com/samucamg/antigravity-account-switcher/internal/proxy"
 )
 
 // ---------------------------------------------------------------------------

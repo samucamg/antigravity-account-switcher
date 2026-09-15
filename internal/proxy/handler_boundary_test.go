@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/test/mocks"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/test/mocks"
 )
 
 // TestHandler_Boundary_EmptyRequestBody tests proxy behavior when receiving empty request bodies.

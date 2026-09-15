@@ -341,7 +341,7 @@ func TestFailoverEngine_PredictiveCheck(t *testing.T) {
 
 		engine := NewFailoverEngine(
 			accRepo, broadcaster, nil,
-			WithQuotaRepository(quotaRepo),
+			WithFailoverQuotaRepository(quotaRepo),
 			WithModelFallback("gemini-2.5-pro", "gemini-2.5-flash", true),
 		)
 
@@ -386,7 +386,7 @@ func TestFailoverEngine_PredictiveCheck(t *testing.T) {
 
 		engine := NewFailoverEngine(
 			accRepo, nil, nil,
-			WithQuotaRepository(quotaRepo),
+			WithFailoverQuotaRepository(quotaRepo),
 			WithModelFallback("gemini-2.5-pro", "gemini-2.5-flash", true),
 		)
 
@@ -419,7 +419,7 @@ func TestFailoverEngine_PredictiveCheck(t *testing.T) {
 
 		engine := NewFailoverEngine(
 			accRepo, nil, nil,
-			WithQuotaRepository(quotaRepo),
+			WithFailoverQuotaRepository(quotaRepo),
 			WithModelFallback("gemini-2.5-pro", "gemini-2.5-flash", false),
 		)
 
@@ -455,7 +455,7 @@ func TestFailoverEngine_PredictiveCheck(t *testing.T) {
 
 		engine := NewFailoverEngine(
 			accRepo, nil, nil,
-			WithQuotaRepository(quotaRepo),
+			WithFailoverQuotaRepository(quotaRepo),
 			WithModelFallback("gemini-2.5-pro", "gemini-2.5-flash", true),
 		)
 
@@ -517,7 +517,7 @@ func TestFailoverEngine_PredictiveCheck(t *testing.T) {
 
 		engine := NewFailoverEngine(
 			accRepo, nil, nil,
-			WithQuotaRepository(quotaRepo),
+			WithFailoverQuotaRepository(quotaRepo),
 			WithModelFallback("gemini-2.5-pro", "gemini-2.5-flash", true),
 		)
 
@@ -583,7 +583,7 @@ func TestFailoverEngine_HandleExhaustion_PrimaryToSecondary(t *testing.T) {
 
 	engine := NewFailoverEngine(
 		accRepo, broadcaster, nil,
-		WithQuotaRepository(quotaRepo),
+		WithFailoverQuotaRepository(quotaRepo),
 		WithModelFallback("gemini-2.5-pro", "gemini-2.5-flash", true),
 	)
 
@@ -792,7 +792,7 @@ func TestFailoverEngine_HandleExhaustion_SecondaryAlreadyExhausted(t *testing.T)
 
 	engine := NewFailoverEngine(
 		accRepo, NewBroadcaster(10), nil,
-		WithQuotaRepository(quotaRepo),
+		WithFailoverQuotaRepository(quotaRepo),
 		WithModelFallback("gemini-2.5-pro", "gemini-2.5-flash", true),
 	)
 
@@ -1138,7 +1138,7 @@ func TestFailoverEngine_AntiStampede_ConcurrentFailover(t *testing.T) {
 
 		engine := NewFailoverEngine(
 			accRepo, nil, nil,
-			WithQuotaRepository(quotaRepo),
+			WithFailoverQuotaRepository(quotaRepo),
 			WithModelFallback("gemini-2.5-pro", "gemini-2.5-flash", true),
 		)
 
@@ -1668,5 +1668,288 @@ func TestFailoverEngine_PredictiveCheck_EmitsEventOnlyOncePerTransition(t *testi
 		}
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("timed out waiting for re-exhaustion fallback event")
+	}
+}
+
+// TestFailoverEngine_PredictiveCheck_ClaudeSonnetToHaiku verifies that when the primary
+// model is claude-sonnet and its quota bucket is exhausted, PredictiveCheck returns
+// shouldRewrite=true with targetModel=claude-haiku (intra-family Claude fallback).
+func TestFailoverEngine_PredictiveCheck_ClaudeSonnetToHaiku(t *testing.T) {
+	ctx := context.Background()
+	accRepo := newMockAccountRepo()
+	quotaRepo := newMockQuotaRepo()
+	broadcaster := NewBroadcaster(10)
+	ch, unsub := broadcaster.Subscribe()
+	defer unsub()
+
+	acc := &domain.Account{
+		ID:       "acc-claude-1",
+		Email:    "claude@example.com",
+		IsActive: true,
+		Status:   domain.AccountStatusActive,
+	}
+	accRepo.addAccount(acc)
+
+	now := time.Now().UTC()
+	quotaRepo.setBuckets("acc-claude-1", []*domain.QuotaBucket{
+		{
+			AccountID:         "acc-claude-1",
+			BucketID:          "3p-claude-sonnet-5h",
+			DisplayName:       "Claude Sonnet (5h)",
+			RemainingFraction: 0.0,
+			RemainingAmount:   0,
+			ResetTime:         now.Add(3 * time.Hour),
+		},
+		{
+			AccountID:         "acc-claude-1",
+			BucketID:          "3p-claude-haiku-5h",
+			DisplayName:       "Claude Haiku (5h)",
+			RemainingFraction: 0.75,
+			RemainingAmount:   750,
+			ResetTime:         now.Add(3 * time.Hour),
+		},
+	})
+
+	engine := NewFailoverEngine(
+		accRepo, broadcaster, nil,
+		WithFailoverQuotaRepository(quotaRepo),
+		WithModelFallback("claude-sonnet-4-6", "claude-haiku-4-5", true),
+	)
+
+	shouldRewrite, targetModel, err := engine.PredictiveCheck(ctx, acc, "claude-sonnet-4-6")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !shouldRewrite {
+		t.Fatalf("expected shouldRewrite == true when claude-sonnet quota is exhausted")
+	}
+	if targetModel != "claude-haiku-4-5" {
+		t.Fatalf("expected targetModel == claude-haiku-4-5, got %s", targetModel)
+	}
+
+	select {
+	case ev := <-ch:
+		if ev.Type != domain.EventTypeModelFallback {
+			t.Fatalf("expected EventTypeModelFallback, got %s", ev.Type)
+		}
+		if ev.Details["mode"] != "predictive" {
+			t.Fatalf("expected mode=predictive, got %v", ev.Details["mode"])
+		}
+		if ev.Details["requested_model"] != "claude-sonnet-4-6" {
+			t.Fatalf("expected requested_model=claude-sonnet-4-6, got %v", ev.Details["requested_model"])
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for EventTypeModelFallback")
+	}
+}
+
+// TestFailoverEngine_PredictiveCheck_ClaudeHaikuSecondary_NoRewrite verifies that when
+// the request already targets the secondary model (haiku), PredictiveCheck does not rewrite.
+func TestFailoverEngine_PredictiveCheck_ClaudeHaikuSecondary_NoRewrite(t *testing.T) {
+	ctx := context.Background()
+	accRepo := newMockAccountRepo()
+
+	acc := &domain.Account{
+		ID:     "acc-claude-2",
+		Email:  "claude2@example.com",
+		Status: domain.AccountStatusActive,
+	}
+	accRepo.addAccount(acc)
+
+	engine := NewFailoverEngine(
+		accRepo, nil, nil,
+		WithModelFallback("claude-sonnet-4-6", "claude-haiku-4-5", true),
+	)
+
+	shouldRewrite, targetModel, err := engine.PredictiveCheck(ctx, acc, "claude-haiku-4-5")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if shouldRewrite {
+		t.Fatalf("expected shouldRewrite == false when secondary (haiku) is explicitly requested")
+	}
+	if targetModel != "claude-haiku-4-5" {
+		t.Fatalf("expected targetModel == claude-haiku-4-5, got %s", targetModel)
+	}
+}
+
+// TestFailoverEngine_HandleExhaustion_ClaudeIntraFamily verifies that a reactive HTTP 429
+// on claude-sonnet triggers ActionFallbackSecondary (not account rotation) when haiku has quota.
+func TestFailoverEngine_HandleExhaustion_ClaudeIntraFamily(t *testing.T) {
+	ctx := context.Background()
+	accRepo := newMockAccountRepo()
+	quotaRepo := newMockQuotaRepo()
+	broadcaster := NewBroadcaster(10)
+	ch, unsub := broadcaster.Subscribe()
+	defer unsub()
+
+	accA := &domain.Account{
+		ID:       "acc-c1",
+		Email:    "c1@example.com",
+		IsActive: true,
+		Status:   domain.AccountStatusActive,
+	}
+	accRepo.addAccount(accA)
+
+	now := time.Now().UTC()
+	quotaRepo.setBuckets("acc-c1", []*domain.QuotaBucket{
+		{
+			AccountID:         "acc-c1",
+			BucketID:          "3p-claude-sonnet-5h",
+			DisplayName:       "Claude Sonnet (5h)",
+			RemainingFraction: 0.0,
+			RemainingAmount:   0,
+			ResetTime:         now.Add(5 * time.Hour),
+		},
+		{
+			AccountID:         "acc-c1",
+			BucketID:          "3p-claude-haiku-5h",
+			DisplayName:       "Claude Haiku (5h)",
+			RemainingFraction: 0.9,
+			RemainingAmount:   900,
+			ResetTime:         now.Add(5 * time.Hour),
+		},
+	})
+
+	engine := NewFailoverEngine(
+		accRepo, broadcaster, nil,
+		WithFailoverQuotaRepository(quotaRepo),
+		WithModelFallback("claude-sonnet-4-6", "claude-haiku-4-5", true),
+	)
+
+	action, targetModel, nextAcc, err := engine.HandleExhaustion(ctx, accA, "claude-sonnet-4-6")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != ActionFallbackSecondary {
+		t.Fatalf("expected ActionFallbackSecondary, got %s", action)
+	}
+	if targetModel != "claude-haiku-4-5" {
+		t.Fatalf("expected targetModel == claude-haiku-4-5, got %s", targetModel)
+	}
+	if nextAcc == nil || nextAcc.ID != "acc-c1" {
+		t.Fatalf("expected same account on intra-family fallback, got %v", nextAcc)
+	}
+
+	select {
+	case ev := <-ch:
+		if ev.Type != domain.EventTypeModelFallback {
+			t.Fatalf("expected EventTypeModelFallback, got %s", ev.Type)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for EventTypeModelFallback")
+	}
+}
+
+// TestFailoverEngine_HandleExhaustion_ClaudeSecondaryExhausted verifies that when haiku (the
+// secondary) is also exhausted, HandleExhaustion escalates to ActionRotateAccount.
+func TestFailoverEngine_HandleExhaustion_ClaudeSecondaryExhausted(t *testing.T) {
+	ctx := context.Background()
+	accRepo := newMockAccountRepo()
+	quotaRepo := newMockQuotaRepo()
+
+	accA := &domain.Account{
+		ID:       "acc-c2",
+		Email:    "c2@example.com",
+		IsActive: true,
+		Status:   domain.AccountStatusActive,
+	}
+	accB := &domain.Account{
+		ID:       "acc-c3",
+		Email:    "c3@example.com",
+		IsActive: false,
+		Status:   domain.AccountStatusActive,
+	}
+	accRepo.addAccount(accA)
+	accRepo.addAccount(accB)
+
+	now := time.Now().UTC()
+	quotaRepo.setBuckets("acc-c2", []*domain.QuotaBucket{
+		{
+			AccountID:         "acc-c2",
+			BucketID:          "3p-claude-sonnet-5h",
+			DisplayName:       "Claude Sonnet (5h)",
+			RemainingFraction: 0.0,
+			ResetTime:         now.Add(5 * time.Hour),
+		},
+		{
+			AccountID:         "acc-c2",
+			BucketID:          "3p-claude-haiku-5h",
+			DisplayName:       "Claude Haiku (5h)",
+			RemainingFraction: 0.0,
+			ResetTime:         now.Add(5 * time.Hour),
+		},
+	})
+
+	engine := NewFailoverEngine(
+		accRepo, nil, nil,
+		WithFailoverQuotaRepository(quotaRepo),
+		WithModelFallback("claude-sonnet-4-6", "claude-haiku-4-5", true),
+	)
+
+	// First exhaust primary to set state
+	engine.mu.Lock()
+	engine.accountStates["acc-c2"] = &accountFallbackState{
+		primaryExhausted:   true,
+		secondaryExhausted: true,
+	}
+	engine.mu.Unlock()
+
+	action, _, nextAcc, err := engine.HandleExhaustion(ctx, accA, "claude-haiku-4-5")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if action != ActionRotateAccount {
+		t.Fatalf("expected ActionRotateAccount when both Claude tiers exhausted, got %s", action)
+	}
+	if nextAcc == nil {
+		t.Fatalf("expected a next account to be returned on rotation")
+	}
+}
+
+// TestMatchesCachedBucket_Claude_SonnetVsHaiku verifies the isolation between Claude
+// sonnet and haiku buckets: a haiku bucket must NOT match a sonnet target and vice versa.
+func TestMatchesCachedBucket_Claude_SonnetVsHaiku(t *testing.T) {
+	accRepo := newMockAccountRepo()
+	engine := NewFailoverEngine(
+		accRepo, nil, nil,
+		WithModelFallback("claude-sonnet-4-6", "claude-haiku-4-5", true),
+	)
+
+	sonnetBucket := &cachedQuotaBucket{
+		category:          CategoryClaudeGPT,
+		bucketIDLower:     "3p-claude-sonnet-5h",
+		displayNameLower:  "claude sonnet (5h)",
+		modelNameLower:    "claude-sonnet-4-6",
+		hasSonnet:         true,
+		hasHaiku:          false,
+		hasOpus:           false,
+		remainingFraction: 0.0,
+	}
+	haikuBucket := &cachedQuotaBucket{
+		category:          CategoryClaudeGPT,
+		bucketIDLower:     "3p-claude-haiku-5h",
+		displayNameLower:  "claude haiku (5h)",
+		modelNameLower:    "claude-haiku-4-5",
+		hasSonnet:         false,
+		hasHaiku:          true,
+		hasOpus:           false,
+		remainingFraction: 0.9,
+	}
+
+	// sonnet target must match sonnet bucket and NOT match haiku bucket
+	if !engine.matchesCachedBucket(sonnetBucket, "claude-sonnet-4-6", CategoryClaudeGPT, false, false, true, false, false, "claude-haiku-4-5", CategoryClaudeGPT, false, false, false, true, false) {
+		t.Error("expected sonnet bucket to match sonnet target")
+	}
+	if engine.matchesCachedBucket(haikuBucket, "claude-sonnet-4-6", CategoryClaudeGPT, false, false, true, false, false, "claude-haiku-4-5", CategoryClaudeGPT, false, false, false, true, false) {
+		t.Error("expected haiku bucket to NOT match sonnet target")
+	}
+
+	// haiku target must match haiku bucket and NOT match sonnet bucket
+	if !engine.matchesCachedBucket(haikuBucket, "claude-haiku-4-5", CategoryClaudeGPT, false, false, false, true, false, "claude-sonnet-4-6", CategoryClaudeGPT, false, false, true, false, false) {
+		t.Error("expected haiku bucket to match haiku target")
+	}
+	if engine.matchesCachedBucket(sonnetBucket, "claude-haiku-4-5", CategoryClaudeGPT, false, false, false, true, false, "claude-sonnet-4-6", CategoryClaudeGPT, false, false, true, false, false) {
+		t.Error("expected sonnet bucket to NOT match haiku target")
 	}
 }

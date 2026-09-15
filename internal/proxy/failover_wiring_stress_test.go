@@ -45,7 +45,7 @@ func setupDiskDB(t *testing.T) (*sqlite.DB, domain.AccountRepository, domain.Met
 // Verifies that when 50 concurrent requests hit 429 on Account A,
 // exactly Account A is rotated to Account B, and the other 49 concurrent requests
 // are redirected to Account B WITHOUT cascading false-exhaustion.
-func TestChallenger_AntiStampede_50Concurrent429_SingleFailover(t *testing.T) {
+func TestFailoverWiring_AntiStampede_50Concurrent429_SingleFailover(t *testing.T) {
 	mockGoogle := mocks.NewMockGoogleServer()
 	defer mockGoogle.Close()
 
@@ -220,7 +220,7 @@ drainLoop:
 // 2. Multi-tier cascading failover under high concurrent load
 // Tests A (429) -> B (429) -> C (200 OK) with 50 parallel requests.
 // Only A and B should be marked exhausted; C and D must remain active/healthy.
-func TestChallenger_MultiTierCascadingFailover_HighConcurrency(t *testing.T) {
+func TestFailoverWiring_MultiTierCascadingFailover_HighConcurrency(t *testing.T) {
 	mockGoogle := mocks.NewMockGoogleServer()
 	defer mockGoogle.Close()
 
@@ -320,7 +320,7 @@ func TestChallenger_MultiTierCascadingFailover_HighConcurrency(t *testing.T) {
 // 3. Request body rewind and data integrity under concurrency
 // Sends 30 concurrent requests with varying body sizes (small 200B, medium 50KB, large 512KB).
 // Verifies byte-for-byte integrity on retry at the upstream mock.
-func TestChallenger_RequestBodyRewindIntegrity_UnderConcurrency(t *testing.T) {
+func TestFailoverWiring_RequestBodyRewindIntegrity_UnderConcurrency(t *testing.T) {
 	mockGoogle := mocks.NewMockGoogleServer()
 	defer mockGoogle.Close()
 
@@ -440,7 +440,7 @@ func TestChallenger_RequestBodyRewindIntegrity_UnderConcurrency(t *testing.T) {
 
 // 4. When all accounts are exhausted, upstream 429 response is returned transparently
 // Verifies status code 429, verbatim response body, and custom headers.
-func TestChallenger_AllAccountsExhausted_Transparent429Passthrough(t *testing.T) {
+func TestFailoverWiring_AllAccountsExhausted_Transparent429Passthrough(t *testing.T) {
 	mockGoogle := mocks.NewMockGoogleServer()
 	defer mockGoogle.Close()
 
@@ -506,7 +506,7 @@ func TestChallenger_AllAccountsExhausted_Transparent429Passthrough(t *testing.T)
 }
 
 // 5. HTTP 403 RESOURCE_EXHAUSTED detection & failover vs 403 PERMISSION_DENIED passthrough
-func TestChallenger_HTTP403_ResourceExhausted_FailoverVsPassthrough(t *testing.T) {
+func TestFailoverWiring_HTTP403_ResourceExhausted_FailoverVsPassthrough(t *testing.T) {
 	mockGoogle := mocks.NewMockGoogleServer()
 	defer mockGoogle.Close()
 
@@ -561,7 +561,7 @@ func TestChallenger_HTTP403_ResourceExhausted_FailoverVsPassthrough(t *testing.T
 }
 
 // 6. MaxRetries limit enforcement when retry count is reached
-func TestChallenger_MaxRetriesEnforcement(t *testing.T) {
+func TestFailoverWiring_MaxRetriesEnforcement(t *testing.T) {
 	mockGoogle := mocks.NewMockGoogleServer()
 	defer mockGoogle.Close()
 
@@ -609,7 +609,7 @@ func TestChallenger_MaxRetriesEnforcement(t *testing.T) {
 }
 
 // 7. Client context cancellation mid-flight resilience
-func TestChallenger_ClientCancellationMidFlight(t *testing.T) {
+func TestFailoverWiring_ClientCancellationMidFlight(t *testing.T) {
 	mockGoogle := mocks.NewMockGoogleServer()
 	defer mockGoogle.Close()
 

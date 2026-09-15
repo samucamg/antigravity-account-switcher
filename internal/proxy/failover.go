@@ -66,6 +66,9 @@ type cachedQuotaBucket struct {
 	modelNameLower    string
 	hasPro            bool
 	hasFlash          bool
+	hasSonnet         bool
+	hasHaiku          bool
+	hasOpus           bool
 	remainingFraction float64
 	remainingAmount   int64
 	resetTime         time.Time
@@ -127,16 +130,22 @@ type FailoverEngine struct {
 	fallbackSecondaryEnabled bool
 
 	// Pre-computed normalized fields to ensure 0 allocations on hot path
-	normPrimary       string
-	normSecondary     string
-	primaryLower      string
-	secondaryLower    string
-	primaryCat        ModelCategory
-	secondaryCat      ModelCategory
-	primaryHasPro     bool
-	primaryHasFlash   bool
-	secondaryHasPro   bool
-	secondaryHasFlash bool
+	normPrimary         string
+	normSecondary       string
+	primaryLower        string
+	secondaryLower      string
+	primaryCat          ModelCategory
+	secondaryCat        ModelCategory
+	primaryHasPro       bool
+	primaryHasFlash     bool
+	primaryHasSonnet    bool
+	primaryHasHaiku     bool
+	primaryHasOpus      bool
+	secondaryHasPro     bool
+	secondaryHasFlash   bool
+	secondaryHasSonnet  bool
+	secondaryHasHaiku   bool
+	secondaryHasOpus    bool
 
 	mu            sync.RWMutex
 	accountStates map[string]*accountFallbackState
@@ -185,8 +194,14 @@ func (f *FailoverEngine) updateFallbackFieldsLocked(primary, secondary string, e
 	f.secondaryCat = CategorizeModel(f.normSecondary)
 	f.primaryHasPro = strings.Contains(f.primaryLower, "pro")
 	f.primaryHasFlash = strings.Contains(f.primaryLower, "flash")
+	f.primaryHasSonnet = strings.Contains(f.primaryLower, "sonnet")
+	f.primaryHasHaiku = strings.Contains(f.primaryLower, "haiku")
+	f.primaryHasOpus = strings.Contains(f.primaryLower, "opus")
 	f.secondaryHasPro = strings.Contains(f.secondaryLower, "pro")
 	f.secondaryHasFlash = strings.Contains(f.secondaryLower, "flash")
+	f.secondaryHasSonnet = strings.Contains(f.secondaryLower, "sonnet")
+	f.secondaryHasHaiku = strings.Contains(f.secondaryLower, "haiku")
+	f.secondaryHasOpus = strings.Contains(f.secondaryLower, "opus")
 }
 
 // SetFallbackConfig dynamically updates the fallback configuration in a thread-safe manner.
@@ -267,6 +282,9 @@ func (f *FailoverEngine) UpdateQuotaCache(accountID string, buckets any) {
 		cleanModel := strings.ToLower(NormalizeModelName(b.BucketID))
 		hasPro := strings.Contains(bidLower, "pro") || strings.Contains(dnameLower, "pro")
 		hasFlash := strings.Contains(bidLower, "flash") || strings.Contains(dnameLower, "flash")
+		hasSonnet := strings.Contains(bidLower, "sonnet") || strings.Contains(dnameLower, "sonnet")
+		hasHaiku := strings.Contains(bidLower, "haiku") || strings.Contains(dnameLower, "haiku")
+		hasOpus := strings.Contains(bidLower, "opus") || strings.Contains(dnameLower, "opus")
 
 		cached = append(cached, cachedQuotaBucket{
 			category:          cat,
@@ -275,6 +293,9 @@ func (f *FailoverEngine) UpdateQuotaCache(accountID string, buckets any) {
 			modelNameLower:    cleanModel,
 			hasPro:            hasPro,
 			hasFlash:          hasFlash,
+			hasSonnet:         hasSonnet,
+			hasHaiku:          hasHaiku,
+			hasOpus:           hasOpus,
 			remainingFraction: b.RemainingFraction,
 			remainingAmount:   b.RemainingAmount,
 			resetTime:         b.ResetTime,
@@ -292,7 +313,7 @@ func (f *FailoverEngine) UpdateQuotaCache(accountID string, buckets any) {
 		if state.primaryExhausted {
 			for i := range cached {
 				b := &cached[i]
-				if f.matchesCachedBucket(b, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash) {
+				if f.matchesCachedBucket(b, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash, f.primaryHasSonnet, f.primaryHasHaiku, f.primaryHasOpus, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash, f.secondaryHasSonnet, f.secondaryHasHaiku, f.secondaryHasOpus) {
 					if !b.isExhausted() || b.hasReset(now) || b.remainingFraction > 0.05 {
 						state.primaryExhausted = false
 						state.fallbackLogged = false
@@ -304,7 +325,7 @@ func (f *FailoverEngine) UpdateQuotaCache(accountID string, buckets any) {
 		if state.secondaryExhausted {
 			for i := range cached {
 				b := &cached[i]
-				if f.matchesCachedBucket(b, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash) {
+				if f.matchesCachedBucket(b, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash, f.secondaryHasSonnet, f.secondaryHasHaiku, f.secondaryHasOpus, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash, f.primaryHasSonnet, f.primaryHasHaiku, f.primaryHasOpus) {
 					if !b.isExhausted() || b.hasReset(now) || b.remainingFraction > 0.05 {
 						state.secondaryExhausted = false
 						break
@@ -417,26 +438,36 @@ func (f *FailoverEngine) markModelExhaustedLocked(accountID string, model string
 	cat := CategorizeModel(norm)
 	hasPro := strings.Contains(lower, "pro")
 	hasFlash := strings.Contains(lower, "flash")
+	hasSonnet := strings.Contains(lower, "sonnet")
+	hasHaiku := strings.Contains(lower, "haiku")
+	hasOpus := strings.Contains(lower, "opus")
 
 	var otherLower string
 	var otherCat ModelCategory
 	var otherHasPro, otherHasFlash bool
+	var otherHasSonnet, otherHasHaiku, otherHasOpus bool
 	if f.isPrimaryModelLocked(model) {
 		otherLower = f.secondaryLower
 		otherCat = f.secondaryCat
 		otherHasPro = f.secondaryHasPro
 		otherHasFlash = f.secondaryHasFlash
+		otherHasSonnet = f.secondaryHasSonnet
+		otherHasHaiku = f.secondaryHasHaiku
+		otherHasOpus = f.secondaryHasOpus
 	} else if f.isSecondaryModelLocked(model) {
 		otherLower = f.primaryLower
 		otherCat = f.primaryCat
 		otherHasPro = f.primaryHasPro
 		otherHasFlash = f.primaryHasFlash
+		otherHasSonnet = f.primaryHasSonnet
+		otherHasHaiku = f.primaryHasHaiku
+		otherHasOpus = f.primaryHasOpus
 	}
 
 	updated := false
 	for i := range buckets {
 		b := &buckets[i]
-		if f.matchesCachedBucket(b, lower, cat, hasPro, hasFlash, otherLower, otherCat, otherHasPro, otherHasFlash) {
+		if f.matchesCachedBucket(b, lower, cat, hasPro, hasFlash, hasSonnet, hasHaiku, hasOpus, otherLower, otherCat, otherHasPro, otherHasFlash, otherHasSonnet, otherHasHaiku, otherHasOpus) {
 			b.remainingFraction = 0.0
 			b.remainingAmount = 0
 			b.resetTime = resetTime
@@ -451,6 +482,9 @@ func (f *FailoverEngine) markModelExhaustedLocked(accountID string, model string
 			modelNameLower:    lower,
 			hasPro:            hasPro,
 			hasFlash:          hasFlash,
+			hasSonnet:         hasSonnet,
+			hasHaiku:          hasHaiku,
+			hasOpus:           hasOpus,
 			remainingFraction: 0.0,
 			remainingAmount:   0,
 			resetTime:         resetTime,
@@ -487,6 +521,15 @@ func (f *FailoverEngine) isPrimaryModelLocked(model string) bool {
 	if f.primaryHasPro && strings.Contains(lowerNorm, "pro") && !strings.Contains(lowerNorm, "flash") {
 		return true
 	}
+	if f.primaryHasSonnet && strings.Contains(lowerNorm, "sonnet") && !strings.Contains(lowerNorm, "haiku") && !strings.Contains(lowerNorm, "opus") {
+		return true
+	}
+	if f.primaryHasHaiku && strings.Contains(lowerNorm, "haiku") && !strings.Contains(lowerNorm, "sonnet") && !strings.Contains(lowerNorm, "opus") {
+		return true
+	}
+	if f.primaryHasOpus && strings.Contains(lowerNorm, "opus") && !strings.Contains(lowerNorm, "sonnet") && !strings.Contains(lowerNorm, "haiku") {
+		return true
+	}
 
 	cat := CategorizeModel(norm)
 	return cat != CategoryUnknown && cat == f.primaryCat && cat != f.secondaryCat
@@ -507,6 +550,15 @@ func (f *FailoverEngine) isSecondaryModelLocked(model string) bool {
 	if f.secondaryHasPro && strings.Contains(lowerNorm, "pro") && !strings.Contains(lowerNorm, "flash") {
 		return true
 	}
+	if f.secondaryHasSonnet && strings.Contains(lowerNorm, "sonnet") && !strings.Contains(lowerNorm, "haiku") && !strings.Contains(lowerNorm, "opus") {
+		return true
+	}
+	if f.secondaryHasHaiku && strings.Contains(lowerNorm, "haiku") && !strings.Contains(lowerNorm, "sonnet") && !strings.Contains(lowerNorm, "opus") {
+		return true
+	}
+	if f.secondaryHasOpus && strings.Contains(lowerNorm, "opus") && !strings.Contains(lowerNorm, "sonnet") && !strings.Contains(lowerNorm, "haiku") {
+		return true
+	}
 
 	cat := CategorizeModel(norm)
 	return cat != CategoryUnknown && cat == f.secondaryCat && cat != f.primaryCat
@@ -518,10 +570,16 @@ func (f *FailoverEngine) matchesCachedBucket(
 	targetCat ModelCategory,
 	targetHasPro bool,
 	targetHasFlash bool,
+	targetHasSonnet bool,
+	targetHasHaiku bool,
+	targetHasOpus bool,
 	otherLower string,
 	otherCat ModelCategory,
 	otherHasPro bool,
 	otherHasFlash bool,
+	otherHasSonnet bool,
+	otherHasHaiku bool,
+	otherHasOpus bool,
 ) bool {
 	if b == nil {
 		return false
@@ -537,10 +595,22 @@ func (f *FailoverEngine) matchesCachedBucket(
 		return false
 	}
 
+	// Gemini intra-family: pro vs flash
 	if targetHasPro && b.hasPro && !b.hasFlash {
 		return true
 	}
 	if targetHasFlash && b.hasFlash && !b.hasPro {
+		return true
+	}
+
+	// Claude intra-family: sonnet vs haiku vs opus
+	if targetHasSonnet && b.hasSonnet && !b.hasHaiku && !b.hasOpus {
+		return true
+	}
+	if targetHasHaiku && b.hasHaiku && !b.hasSonnet && !b.hasOpus {
+		return true
+	}
+	if targetHasOpus && b.hasOpus && !b.hasSonnet && !b.hasHaiku {
 		return true
 	}
 
@@ -601,6 +671,9 @@ func (f *FailoverEngine) getAccountBucketsLocked(ctx context.Context, accountID 
 		cleanModel := strings.ToLower(NormalizeModelName(b.BucketID))
 		hasPro := strings.Contains(bidLower, "pro") || strings.Contains(dnameLower, "pro")
 		hasFlash := strings.Contains(bidLower, "flash") || strings.Contains(dnameLower, "flash")
+		hasSonnet := strings.Contains(bidLower, "sonnet") || strings.Contains(dnameLower, "sonnet")
+		hasHaiku := strings.Contains(bidLower, "haiku") || strings.Contains(dnameLower, "haiku")
+		hasOpus := strings.Contains(bidLower, "opus") || strings.Contains(dnameLower, "opus")
 
 		cached = append(cached, cachedQuotaBucket{
 			category:          cat,
@@ -609,6 +682,9 @@ func (f *FailoverEngine) getAccountBucketsLocked(ctx context.Context, accountID 
 			modelNameLower:    cleanModel,
 			hasPro:            hasPro,
 			hasFlash:          hasFlash,
+			hasSonnet:         hasSonnet,
+			hasHaiku:          hasHaiku,
+			hasOpus:           hasOpus,
 			remainingFraction: b.RemainingFraction,
 			remainingAmount:   b.RemainingAmount,
 			resetTime:         b.ResetTime,
@@ -630,7 +706,7 @@ func (f *FailoverEngine) hasSecondaryQuotaLocked(ctx context.Context, acc *domai
 	now := time.Now().UTC()
 	for i := range buckets {
 		b := &buckets[i]
-		if f.matchesCachedBucket(b, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash) {
+		if f.matchesCachedBucket(b, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash, f.secondaryHasSonnet, f.secondaryHasHaiku, f.secondaryHasOpus, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash, f.primaryHasSonnet, f.primaryHasHaiku, f.primaryHasOpus) {
 			if b.isExhausted() && !b.hasReset(now) {
 				return false
 			}
@@ -673,8 +749,14 @@ func (f *FailoverEngine) PredictiveCheck(
 	secCat := f.secondaryCat
 	priHasPro := f.primaryHasPro
 	priHasFlash := f.primaryHasFlash
+	priHasSonnet := f.primaryHasSonnet
+	priHasHaiku := f.primaryHasHaiku
+	priHasOpus := f.primaryHasOpus
 	secHasPro := f.secondaryHasPro
 	secHasFlash := f.secondaryHasFlash
+	secHasSonnet := f.secondaryHasSonnet
+	secHasHaiku := f.secondaryHasHaiku
+	secHasOpus := f.secondaryHasOpus
 	modelSec := f.modelSecondary
 
 	normReq := NormalizeModelName(requestedModel)
@@ -692,7 +774,10 @@ func (f *FailoverEngine) PredictiveCheck(
 	matchesPrimary := strings.EqualFold(normReq, normPri) ||
 		(priCat != CategoryUnknown && priCat != secCat && catReq == priCat) ||
 		(priHasPro && strings.Contains(lowerNormReq, "pro") && !strings.Contains(lowerNormReq, "flash")) ||
-		(priHasFlash && strings.Contains(lowerNormReq, "flash") && !strings.Contains(lowerNormReq, "pro"))
+		(priHasFlash && strings.Contains(lowerNormReq, "flash") && !strings.Contains(lowerNormReq, "pro")) ||
+		(priHasSonnet && strings.Contains(lowerNormReq, "sonnet") && !strings.Contains(lowerNormReq, "haiku") && !strings.Contains(lowerNormReq, "opus")) ||
+		(priHasHaiku && strings.Contains(lowerNormReq, "haiku") && !strings.Contains(lowerNormReq, "sonnet") && !strings.Contains(lowerNormReq, "opus")) ||
+		(priHasOpus && strings.Contains(lowerNormReq, "opus") && !strings.Contains(lowerNormReq, "sonnet") && !strings.Contains(lowerNormReq, "haiku"))
 
 	if !matchesPrimary {
 		f.mu.RUnlock()
@@ -708,7 +793,7 @@ func (f *FailoverEngine) PredictiveCheck(
 	if ok && len(buckets) > 0 {
 		for i := range buckets {
 			b := &buckets[i]
-			if f.matchesCachedBucket(b, priLower, priCat, priHasPro, priHasFlash, secLower, secCat, secHasPro, secHasFlash) {
+			if f.matchesCachedBucket(b, priLower, priCat, priHasPro, priHasFlash, priHasSonnet, priHasHaiku, priHasOpus, secLower, secCat, secHasPro, secHasFlash, secHasSonnet, secHasHaiku, secHasOpus) {
 				if b.isExhausted() && !b.hasReset(now) {
 					cachedPrimaryExhausted = true
 					break
@@ -762,7 +847,7 @@ func (f *FailoverEngine) PredictiveCheck(
 	if primaryExhausted && len(buckets) > 0 {
 		for i := range buckets {
 			b := &buckets[i]
-			if f.matchesCachedBucket(b, priLower, priCat, priHasPro, priHasFlash, secLower, secCat, secHasPro, secHasFlash) {
+			if f.matchesCachedBucket(b, priLower, priCat, priHasPro, priHasFlash, priHasSonnet, priHasHaiku, priHasOpus, secLower, secCat, secHasPro, secHasFlash, secHasSonnet, secHasHaiku, secHasOpus) {
 				if !b.isExhausted() || b.hasReset(now) || b.remainingFraction > 0.05 {
 					f.mu.RUnlock()
 					f.mu.Lock()
@@ -783,7 +868,7 @@ func (f *FailoverEngine) PredictiveCheck(
 	if !primaryExhausted && len(buckets) > 0 {
 		for i := range buckets {
 			b := &buckets[i]
-			if f.matchesCachedBucket(b, priLower, priCat, priHasPro, priHasFlash, secLower, secCat, secHasPro, secHasFlash) {
+			if f.matchesCachedBucket(b, priLower, priCat, priHasPro, priHasFlash, priHasSonnet, priHasHaiku, priHasOpus, secLower, secCat, secHasPro, secHasFlash, secHasSonnet, secHasHaiku, secHasOpus) {
 				if b.isExhausted() && !b.hasReset(now) {
 					primaryExhausted = true
 					break
@@ -805,7 +890,7 @@ func (f *FailoverEngine) PredictiveCheck(
 	if secondaryAvailable && len(buckets) > 0 {
 		for i := range buckets {
 			b := &buckets[i]
-			if f.matchesCachedBucket(b, secLower, secCat, secHasPro, secHasFlash, priLower, priCat, priHasPro, priHasFlash) {
+			if f.matchesCachedBucket(b, secLower, secCat, secHasPro, secHasFlash, secHasSonnet, secHasHaiku, secHasOpus, priLower, priCat, priHasPro, priHasFlash, priHasSonnet, priHasHaiku, priHasOpus) {
 				if b.isExhausted() && !b.hasReset(now) {
 					secondaryAvailable = false
 					break
@@ -934,7 +1019,7 @@ func (f *FailoverEngine) HandleExhaustion(
 		buckets := f.getAccountBucketsLocked(ctx, acc.ID)
 		for i := range buckets {
 			b := &buckets[i]
-			if f.matchesCachedBucket(b, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash) {
+			if f.matchesCachedBucket(b, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash, f.primaryHasSonnet, f.primaryHasHaiku, f.primaryHasOpus, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash, f.secondaryHasSonnet, f.secondaryHasHaiku, f.secondaryHasOpus) {
 				if !b.resetTime.IsZero() && b.resetTime.After(time.Now().UTC()) {
 					resetTime = b.resetTime
 					break
@@ -984,7 +1069,7 @@ func (f *FailoverEngine) HandleExhaustion(
 		buckets := f.getAccountBucketsLocked(ctx, acc.ID)
 		for i := range buckets {
 			b := &buckets[i]
-			if f.matchesCachedBucket(b, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash) {
+			if f.matchesCachedBucket(b, f.secondaryLower, f.secondaryCat, f.secondaryHasPro, f.secondaryHasFlash, f.secondaryHasSonnet, f.secondaryHasHaiku, f.secondaryHasOpus, f.primaryLower, f.primaryCat, f.primaryHasPro, f.primaryHasFlash, f.primaryHasSonnet, f.primaryHasHaiku, f.primaryHasOpus) {
 				if !b.resetTime.IsZero() && b.resetTime.After(time.Now().UTC()) {
 					secReset = b.resetTime
 					break

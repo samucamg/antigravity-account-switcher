@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/domain"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/proxy"
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/test/mocks"
+	"github.com/samucamg/antigravity-account-switcher/internal/domain"
+	"github.com/samucamg/antigravity-account-switcher/internal/proxy"
+	"github.com/samucamg/antigravity-account-switcher/test/mocks"
 )
 
 // TestFallback_Wiring_DefaultWiring_StaleWithoutManualSetQuotaRepo tests the production

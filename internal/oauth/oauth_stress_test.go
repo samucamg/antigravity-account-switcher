@@ -38,14 +38,18 @@ func setupTestStore(t *testing.T) (*sqlite.DB, *sqlite.AccountRepository) {
 // -----------------------------------------------------------------------------
 // 1. Concurrent authorization flows on multiple ephemeral ports
 // -----------------------------------------------------------------------------
-func TestChallenger2_ConcurrentLoopbackFlows(t *testing.T) {
+func TestOAuth_ConcurrentLoopbackFlows(t *testing.T) {
+	// tokenCounter guarantees unique token IDs across concurrent goroutines,
+	// preventing email collision that would occur with time.Now().UnixNano().
+	var tokenCounter atomic.Int64
+
 	// Custom mock server that generates unique emails per token
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		switch r.URL.Path {
 		case "/token":
 			w.WriteHeader(http.StatusOK)
-			tok := fmt.Sprintf("tok_%d", time.Now().UnixNano())
+			tok := fmt.Sprintf("tok_%d", tokenCounter.Add(1))
 			_ = json.NewEncoder(w).Encode(oauth.TokenResponse{
 				AccessToken:  tok,
 				TokenType:    "Bearer",
@@ -181,7 +185,7 @@ func TestChallenger2_ConcurrentLoopbackFlows(t *testing.T) {
 // -----------------------------------------------------------------------------
 // 2. State parameter tampering, missing, expiration, and replay protection
 // -----------------------------------------------------------------------------
-func TestChallenger2_StateTamperingAndExpiration(t *testing.T) {
+func TestOAuth_StateTamperingAndExpiration(t *testing.T) {
 	server := mocks.NewMockGoogleServer()
 	defer server.Close()
 
@@ -322,7 +326,7 @@ func TestChallenger2_StateTamperingAndExpiration(t *testing.T) {
 // -----------------------------------------------------------------------------
 // 3. PKCE code verifier mismatches (RFC 7636 & RFC 8252)
 // -----------------------------------------------------------------------------
-func TestChallenger2_PKCEMismatchRejection(t *testing.T) {
+func TestOAuth_PKCEMismatchRejection(t *testing.T) {
 	_, accRepo := setupTestStore(t)
 	ctx := context.Background()
 
@@ -499,7 +503,7 @@ func TestChallenger2_PKCEMismatchRejection(t *testing.T) {
 // -----------------------------------------------------------------------------
 // 4. Invariant idx_accounts_single_active in SQLite under heavy concurrency
 // -----------------------------------------------------------------------------
-func TestChallenger2_SingleActiveInvariant_Stress(t *testing.T) {
+func TestOAuth_SingleActiveInvariant_Stress(t *testing.T) {
 	db, accRepo := setupTestStore(t)
 	ctx := context.Background()
 
@@ -613,7 +617,7 @@ func TestChallenger2_SingleActiveInvariant_Stress(t *testing.T) {
 // -----------------------------------------------------------------------------
 // 5. Empirical Challenge: Multiple/Duplicate Requests to the Ephemeral Callback Listener
 // -----------------------------------------------------------------------------
-func TestChallenger2_DuplicateCallbacks_ChannelSendVulnerability(t *testing.T) {
+func TestOAuth_DuplicateCallbacks_ChannelSendVulnerability(t *testing.T) {
 	server := mocks.NewMockGoogleServer()
 	defer server.Close()
 

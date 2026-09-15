@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Muriel-Gasparini/antigravity-account-switcher/internal/config"
+	"github.com/samucamg/antigravity-account-switcher/internal/config"
 )
 
 // runCLIInSubprocess executes runConfig in a child test process to test commands that invoke os.Exit(1).
@@ -80,7 +80,7 @@ func TestCLI_Config_List(t *testing.T) {
 		"model_secondary:",
 		"fallback_secondary_enabled:",
 		"gemini-2.5-pro",
-		"claude-3-5-sonnet",
+		"gemini-2.5-flash",
 		"false",
 	}
 

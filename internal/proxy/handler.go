@@ -43,18 +43,18 @@ func (f TokenRefresherFunc) RefreshToken(ctx context.Context, refreshToken strin
 
 // Config holds configuration parameters for the reverse proxy.
 type Config struct {
-	TargetURL         string
-	MaxRetries        int
-	maxRetriesSet     bool
-	MaxBodyBytes      int64
-	HTTPClient        *http.Client
-	TokenExpiryMargin time.Duration
-	TokenRefresher    TokenRefresher
-	MetricsRepo       domain.MetricsRepository
-	EventBroadcaster  domain.EventBroadcaster
-	EventRepo         domain.EventRepository
-	FailoverEngine    *FailoverEngine
-	QuotaRepo         domain.QuotaRepository
+	TargetURL            string
+	MaxRetries           int
+	maxRetriesSet        bool
+	MaxBodyBytes         int64
+	HTTPClient           *http.Client
+	TokenExpiryMargin    time.Duration
+	TokenRefresher       TokenRefresher
+	MetricsRepo          domain.MetricsRepository
+	EventBroadcaster     domain.EventBroadcaster
+	EventRepo            domain.EventRepository
+	FailoverEngine       *FailoverEngine
+	QuotaRepo            domain.QuotaRepository
 	QuotaSwitchThreshold float64
 }
 
@@ -527,6 +527,17 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var currentAcc *domain.Account
 	isPassThrough := false
 
+	// 2. Capture original request baseline early so quota checks can be model-aware
+	origModel, _, _ := ExtractModelFromRequest(r, buffered.Bytes())
+	origPath := r.URL.Path
+	origQuery := r.URL.RawQuery
+	origBody := buffered.Bytes()
+
+	currentModel := origModel
+	currentPath := origPath
+	currentQuery := origQuery
+	currentBody := origBody
+
 	if isCloudCode {
 		// Resolve active account from repository
 		acc, accErr := h.accountRepo.GetActive(ctx)
@@ -551,11 +562,16 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			currentAcc = acc
 		}
 
-		// Proactive quota threshold check (e.g. >= 85% usage switch)
-		if currentAcc != nil && h.cfg.QuotaRepo != nil && h.cfg.QuotaSwitchThreshold > 0 && h.failoverEngine != nil {
+		// Model-aware proactive quota threshold check (e.g. >= 85% usage switch)
+		if currentAcc != nil && h.cfg.QuotaRepo != nil && h.cfg.QuotaSwitchThreshold > 0 && h.failoverEngine != nil && origModel != "" {
+			reqCat := CategorizeModel(origModel)
 			buckets, _ := h.cfg.QuotaRepo.GetByAccountID(ctx, currentAcc.ID)
 			for _, b := range buckets {
-				if b != nil && b.IsUsageAboveThreshold(h.cfg.QuotaSwitchThreshold) {
+				if b == nil {
+					continue
+				}
+				// Only trigger rotation if the bucket matches the requested model family
+				if (reqCat == CategoryUnknown || MatchesBucket(b, reqCat)) && b.IsUsageAboveThreshold(h.cfg.QuotaSwitchThreshold) {
 					if rotated, err := h.failoverEngine.RotateProactively(ctx, currentAcc, b.UsageFraction()); err == nil && rotated != nil {
 						currentAcc = rotated
 					}
@@ -567,25 +583,15 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		isPassThrough = true
 	}
 
-	// 2. Capture original request baseline
-	origModel, _, _ := ExtractModelFromRequest(r, buffered.Bytes())
-	origPath := r.URL.Path
-	origQuery := r.URL.RawQuery
-	origBody := buffered.Bytes()
-
-	currentModel := origModel
-	currentPath := origPath
-	currentQuery := origQuery
-	currentBody := origBody
-
-	// Force primary model configured in the dashboard (source of truth) unless client already requests secondary
+	// Force primary model configured in the dashboard (source of truth) only when fallback is enabled
 	if isCloudCode && !isPassThrough && h.failoverEngine != nil {
 		h.failoverEngine.mu.RLock()
 		primary := h.failoverEngine.modelPrimary
 		secondary := h.failoverEngine.modelSecondary
+		enabled := h.failoverEngine.fallbackSecondaryEnabled
 		h.failoverEngine.mu.RUnlock()
 
-		if primary != "" && origModel != "" &&
+		if enabled && primary != "" && origModel != "" &&
 			NormalizeModelName(origModel) != NormalizeModelName(primary) &&
 			(secondary == "" || NormalizeModelName(origModel) != NormalizeModelName(secondary)) {
 			buffered = h.rewriteRequestModel(r, buffered, primary)
@@ -778,8 +784,28 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				// If thought signature error persists or cross-model error occurred, trigger failover/rotation
-				if isThoughtSigErr || currentModel != origModel {
+				if isThoughtSigErr && CategorizeModel(currentModel) == CategoryClaudeGPT {
+					// Attempt in-flight sanitization by stripping thought blocks and invalid signatures
+					if sanitized, sErr := SanitizeClaudeSignatures(currentBody); sErr == nil && !bytes.Equal(sanitized, currentBody) {
+						_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 512*1024))
+						_ = resp.Body.Close()
+						currentBody = sanitized
+						buffered = &BufferedRequest{Body: currentBody}
+						SynchronizeRequest(r, currentBody, currentPath, currentQuery)
+						if h.eventBroadcaster != nil {
+							h.eventBroadcaster.Broadcast(&domain.ProxyEvent{
+								Type:      domain.EventTypeModelFallback,
+								AccountID: currentAcc.ID,
+								Message:   fmt.Sprintf("Sanitized Claude thought signatures after 400 error on %s", currentModel),
+								Timestamp: time.Now().UTC(),
+							})
+						}
+						continue // Retry upstream with sanitized payload
+					}
+				}
+
+				// Only trigger account failover/rotation if cross-model error occurred
+				if currentModel != origModel {
 					isExhausted = true
 				}
 			} else if resp.StatusCode == http.StatusForbidden {

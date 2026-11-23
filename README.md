@@ -1,12 +1,27 @@
+> [!WARNING]
+> ## 📦 Repository Archived — Migrated to [**Vero-Antigravity-Hub**](https://github.com/samucamg/Vero-Antigravity-Hub)
+>
+> This repository has evolved far beyond a simple account switcher and is **no longer maintained here**. All active development, fixes, and new features now live in the new official repository:
+>
+> 👉 **[github.com/samucamg/Vero-Antigravity-Hub](https://github.com/samucamg/Vero-Antigravity-Hub)**
+>
+> ### ✨ Why migrate to Vero-Antigravity-Hub?
+> - **Real 3-Group Quota Routing (`Gemini`, `Claude & GPT`, `Gemini 4 Argon`)**: Aligned directly with Google Cloud Code's real quota buckets, with independent **5-hour** and **weekly** window tracking so exhausted groups are isolated without false 429s across unrelated models.
+> - **Smart Account Selection**: Ranks accounts by effective remaining quota fraction, earliest weekly reset time (preventing expiring quota waste), and **Paid vs. Free/Trial tier prioritization** — reserving Pro accounts for **Argon**, **Claude Opus 5.5 / Sonnet 5.5**, and **Neon**, while routing **Flash / Sonar** to Free accounts first.
+> - **Model Catalog Union (`:fetchAvailableModels`)**: Merges Pro and Free model catalogs so the Antigravity IDE selector always displays all Pro models even when a Free account is active.
+> - **Gemini 4 Hydrogen Sonar Shielding**: Short-prompt (`< 128` `maxOutputTokens`) bypass, 25s first-useful-chunk timeout, pre-first-text SSE buffering, exact `3.8-flash` variant fallback on HTTP 503, and automatic circuit breaker.
+> - **Native Windows Process Supervisor & `language_server.exe` Shim**: Win32 Job Object lifecycle isolation, 1-click **"Shut Down All"** dashboard control (`cloudflared`, IDE, `language_server`, proxy, poller), and transparent `--api_server_url` / `--cloud_code_endpoint` redirection for Antigravity 2.34+.
+> - **External LLM Gateway Integration**: Ready for **VeroRoute / VeroClass (`/openai`)** and OpenAI-compatible providers.
+
 <p align="center">
   <img src="https://img.shields.io/badge/Made%20with-Go-00ADD8?style=plastic&logo=go&logoColor=white" alt="Go"/>
   <img src="https://img.shields.io/badge/version-v0.2.0-blue?style=plastic" alt="version"/>
-  <img src="https://img.shields.io/badge/status-stable-success?style=plastic" alt="status"/>
+  <img src="https://img.shields.io/badge/status-archived-critical?style=plastic" alt="status"/>
 </p>
 
-<h1 align="center">🚀 Antigravity Account Switcher</h1>
+<h1 align="center">🚀 Antigravity Account Switcher (Archived)</h1>
 
-<p align="center"><b>Your “never get rate-limited again” sidekick for Google Antigravity 2.0.</b></p>
+<p align="center"><b>Your “never get rate-limited again” sidekick for Google Antigravity 2.0 — superseded by <a href="https://github.com/samucamg/Vero-Antigravity-Hub">Vero-Antigravity-Hub</a>.</b></p>
 
 <p align="center">
   🇺🇸 English · <a href="README.pt-BR.md">🇧🇷 Português (Brasil)</a>

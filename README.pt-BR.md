@@ -1,12 +1,27 @@
+> [!WARNING]
+> ## 📦 Repositório Arquivado — Migrado para [**Vero-Antigravity-Hub**](https://github.com/samucamg/Vero-Antigravity-Hub)
+>
+> Este repositório evoluiu muito além de um simples trocador de contas e **não é mais mantido aqui**. Todo o desenvolvimento ativo, correções e novos recursos agora estão no novo repositório oficial:
+>
+> 👉 **[github.com/samucamg/Vero-Antigravity-Hub](https://github.com/samucamg/Vero-Antigravity-Hub)**
+>
+> ### ✨ Vantagens do novo Vero-Antigravity-Hub
+> - **Roteamento Real por 3 Grupos de Cota (`Gemini`, `Claude & GPT`, `Gemini 4 Argon`)**: Alinhado diretamente aos buckets reais do Google Cloud Code, com rastreamento independente das janelas de **5 horas** e **semanal**, isolando grupos esgotados sem causar 429 falsos em outros modelos.
+> - **Seleção Inteligente de Contas**: Ordena pela fração restante efetiva de cota, menor prazo até o reset semanal (evitando desperdício de cota prestes a renovar) e **priorização entre contas Pagas vs. Free/Trial** — preservando contas Pro para **Argon**, **Claude Opus 5.5 / Sonnet 5.5** e **Neon**, enquanto direciona **Flash / Sonar** primeiro para contas Free.
+> - **União de Catálogo de Modelos (`:fetchAvailableModels`)**: Mescla os catálogos das contas Pro e Free para que o seletor do Antigravity IDE exiba todos os modelos Pro mesmo quando uma conta Free estiver ativa.
+> - **Blindagem do Gemini 4 Hydrogen Sonar**: Bypass para prompts curtos (`maxOutputTokens < 128`), timeout de 25s até o primeiro chunk útil, buffer SSE antes do primeiro texto, fallback exato para a variante `3.8-flash` em HTTP 503 e circuit breaker automático.
+> - **Supervisor Nativo de Processos Windows e Shim do `language_server.exe`**: Isolamento com Win32 Job Objects, botão **"Encerrar Tudo"** no dashboard (`cloudflared`, IDE, `language_server`, proxy e poller) e redirecionamento transparente via `--api_server_url` / `--cloud_code_endpoint` para o Antigravity 2.34+.
+> - **Integração com Gateway LLM Externo**: Pronto para conexão com **VeroRoute / VeroClass (`/openai`)** e provedores compatíveis com a API OpenAI.
+
 <p align="center">
   <img src="https://img.shields.io/badge/Feito%20com-Go-00ADD8?style=plastic&logo=go&logoColor=white" alt="Go"/>
   <img src="https://img.shields.io/badge/vers%C3%A3o-v0.2.0-blue?style=plastic" alt="versão"/>
-  <img src="https://img.shields.io/badge/status-est%C3%A1vel-success?style=plastic" alt="status"/>
+  <img src="https://img.shields.io/badge/status-arquivado-critical?style=plastic" alt="status"/>
 </p>
 
-<h1 align="center">🚀 Antigravity Account Switcher</h1>
+<h1 align="center">🚀 Antigravity Account Switcher (Arquivado)</h1>
 
-<p align="center"><b>Seu “nunca mais fique sem cota” para o Google Antigravity 2.0.</b></p>
+<p align="center"><b>Seu “nunca mais fique sem cota” para o Google Antigravity 2.0 — substituído pelo <a href="https://github.com/samucamg/Vero-Antigravity-Hub">Vero-Antigravity-Hub</a>.</b></p>
 
 <p align="center">
   <a href="README.md">🇺🇸 English</a> · 🇧🇷 Português (Brasil)
